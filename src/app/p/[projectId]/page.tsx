@@ -13,13 +13,13 @@ export async function generateMetadata({
   params: Promise<{ projectId: string }>;
 }): Promise<Metadata> {
   const user = await getCurrentUser();
-  if (!user) return { title: "Ushabti" };
+  if (!user) return { title: "CLA Flow" };
   const { projectId } = await params;
   try {
     const { projectName } = await requireMembership(user.id, projectId);
-    return { title: `${projectName} · Ushabti` };
+    return { title: `${projectName} · CLA Flow` };
   } catch {
-    return { title: "Ushabti" };
+    return { title: "CLA Flow" };
   }
 }
 

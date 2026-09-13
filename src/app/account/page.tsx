@@ -5,7 +5,7 @@ import { Account } from "@/components/account/Account";
 import { version } from "../../../package.json";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Account · Ushabti" };
+export const metadata: Metadata = { title: "Account · CLA Flow" };
 
 export default async function AccountPage() {
   const user = await getCurrentUser();

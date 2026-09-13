@@ -40,9 +40,9 @@ export function Account({ user, version }: { user: SessionUser; version: string 
   return (
     <div className={styles.page}>
       <div className={styles.bar}>
-        <div className={styles.mark}>U</div>
+        <img src="https://codingladies.org/favicon.ico" alt="CLA Flow" className={styles.mark} style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'contain' }} />
         <Link href="/projects" className={styles.brand}>
-          Ushabti
+          CLA Flow
         </Link>
         <span style={{ flex: 1 }} />
         <UserMenu user={{ ...user, name, color }} />
@@ -95,7 +95,7 @@ export function Account({ user, version }: { user: SessionUser; version: string 
 
         <PasswordSection notify={notify} />
 
-        <span className={styles.version}>Ushabti {version}</span>
+        <span className={styles.version}>CLA Flow {version}</span>
       </div>
 
       <Toasts toasts={toasts} />

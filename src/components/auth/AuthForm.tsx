@@ -167,8 +167,8 @@ export function AuthForm({ mode, signupOpen = true }: { mode: Mode; signupOpen?:
 function Brand() {
   return (
     <div className={styles.brand}>
-      <div className={styles.mark}>U</div>
-      <div className={styles.name}>Ushabti</div>
+      <img src="https://codingladies.org/favicon.ico" alt="CLA Flow" className={styles.mark} style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'contain' }} />
+      <div className={styles.name}>CLA Flow</div>
     </div>
   );
 }

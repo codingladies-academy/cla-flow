@@ -27,7 +27,7 @@ export default function GlobalError({
         }}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 380 }}>
-          <div style={{ fontSize: 15, fontWeight: 600 }}>Ushabti could not start this page</div>
+          <div style={{ fontSize: 15, fontWeight: 600 }}>CLA Flow could not start this page</div>
           <div style={{ fontSize: 12.5, lineHeight: 1.65, color: "#8b919b" }}>
             {error.digest ? (
               <>

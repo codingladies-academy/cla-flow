@@ -4,7 +4,7 @@ import { AuthForm } from "@/components/auth/AuthForm";
 import { getCurrentUser, signupIsOpen } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Create an account · Ushabti" };
+export const metadata: Metadata = { title: "Create an account · CLA Flow" };
 
 export default async function RegisterPage() {
   if (await getCurrentUser()) redirect("/projects");

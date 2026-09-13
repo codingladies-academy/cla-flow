@@ -5,7 +5,7 @@ import { listProjects } from "@/lib/queries";
 import { ProjectList } from "@/components/projects/ProjectList";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Projects · Ushabti" };
+export const metadata: Metadata = { title: "Projects · CLA Flow" };
 
 export default async function ProjectsPage() {
   const user = await getCurrentUser();

@@ -6,7 +6,7 @@ import { version } from "../../../../../package.json";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "Settings · Ushabti" };
+export const metadata = { title: "Settings · CLA Flow" };
 
 export default async function SettingsLayout({
   params,
