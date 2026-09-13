@@ -15,7 +15,13 @@ type UserRow = {
   createdAt: string;
 };
 
-export function AdminPanel({ adminName }: { adminName: string }) {
+export function AdminPanel({
+  adminName,
+  currentUserId,
+}: {
+  adminName: string;
+  currentUserId?: string;
+}) {
   const router = useRouter();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,6 +35,19 @@ export function AdminPanel({ adminName }: { adminName: string }) {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createSuccess, setCreateSuccess] = useState<string | null>(null);
+
+  // Reset password dialog state
+  const [resetUser, setResetUser] = useState<UserRow | null>(null);
+  const [customPassword, setCustomPassword] = useState("");
+  const [sendEmail, setSendEmail] = useState(true);
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetResult, setResetResult] = useState<{
+    password: string;
+    emailSent: boolean;
+    emailError?: string | null;
+  } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -85,7 +104,34 @@ export function AdminPanel({ adminName }: { adminName: string }) {
     }
   }
 
+  async function handleResetPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!resetUser) return;
+    setResetting(true);
+    setResetError(null);
+    try {
+      const res = await api.post<{
+        success: boolean;
+        password: string;
+        emailSent: boolean;
+        emailError?: string | null;
+      }>(`/api/admin/users/${resetUser.id}/reset-password`, {
+        password: customPassword.trim() || undefined,
+        sendEmail,
+      });
+      setResetResult(res);
+    } catch (err) {
+      setResetError(err instanceof Error ? err.message : "Failed to reset password.");
+    } finally {
+      setResetting(false);
+    }
+  }
+
   async function deleteUser(userId: string, userName: string) {
+    if (userId === currentUserId) {
+      alert("You cannot delete your own account.");
+      return;
+    }
     if (!confirm(`Delete ${userName}'s account? This cannot be undone.`)) return;
     try {
       await api.del(`/api/admin/users/${userId}`);
@@ -231,13 +277,34 @@ export function AdminPanel({ adminName }: { adminName: string }) {
                     <td className={styles.muted}>
                       {new Date(u.createdAt).toLocaleDateString()}
                     </td>
-                    <td>
+                    <td className={styles.actions}>
                       <button
-                        className={styles.deleteBtn}
-                        onClick={() => deleteUser(u.id, u.name)}
+                        className={styles.resetBtn}
+                        type="button"
+                        onClick={() => {
+                          setResetUser(u);
+                          setCustomPassword("");
+                          setSendEmail(true);
+                          setResetResult(null);
+                          setResetError(null);
+                          setCopied(false);
+                        }}
                       >
-                        Remove
+                        Reset password
                       </button>
+                      {u.id === currentUserId ? (
+                        <span className={styles.youBadge} title="You cannot delete yourself">
+                          You
+                        </span>
+                      ) : (
+                        <button
+                          className={styles.deleteBtn}
+                          type="button"
+                          onClick={() => deleteUser(u.id, u.name)}
+                        >
+                          Remove
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -246,6 +313,112 @@ export function AdminPanel({ adminName }: { adminName: string }) {
           )}
         </section>
       </div>
+
+      {/* Password Reset Modal */}
+      {resetUser && (
+        <div className={styles.dialogOverlay} onClick={() => setResetUser(null)}>
+          <div className={styles.dialogCard} onClick={(e) => e.stopPropagation()}>
+            <h3 className={styles.dialogTitle}>Reset Password</h3>
+            <p className={styles.dialogSubtitle}>
+              Resetting credentials for <strong>{resetUser.name}</strong> ({resetUser.email})
+            </p>
+
+            {resetResult ? (
+              <>
+                <p style={{ margin: 0, fontSize: 13, color: "var(--text-2)" }}>
+                  Password has been updated:
+                </p>
+                <div className={styles.tempPassBox}>
+                  <code className={styles.tempPassCode}>{resetResult.password}</code>
+                  <button
+                    type="button"
+                    className={styles.copyButton}
+                    onClick={() => {
+                      void navigator.clipboard.writeText(resetResult.password);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                  >
+                    {copied ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 12.5,
+                    color: resetResult.emailSent ? "#3fb0c8" : "var(--text-3)",
+                  }}
+                >
+                  {resetResult.emailSent
+                    ? `✓ Credentials emailed to ${resetUser.email} via Azure Mailer.`
+                    : "Email was not sent. Please share this password with the user directly."}
+                </p>
+                <div className={styles.dialogActions}>
+                  <button
+                    className={styles.createBtn}
+                    type="button"
+                    onClick={() => setResetUser(null)}
+                  >
+                    Done
+                  </button>
+                </div>
+              </>
+            ) : (
+              <form onSubmit={handleResetPassword} className={styles.form}>
+                <div>
+                  <label
+                    style={{
+                      fontSize: 12,
+                      color: "var(--text-2)",
+                      display: "block",
+                      marginBottom: 6,
+                    }}
+                  >
+                    New password (leave blank to auto-generate a secure password)
+                  </label>
+                  <input
+                    className={styles.input}
+                    type="text"
+                    placeholder="Auto-generate or enter custom (min 8 chars)"
+                    value={customPassword}
+                    onChange={(e) => setCustomPassword(e.target.value)}
+                    style={{ width: "100%" }}
+                  />
+                </div>
+
+                <label className={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={sendEmail}
+                    onChange={(e) => setSendEmail(e.target.checked)}
+                  />
+                  <span>Send credentials to {resetUser.email} via email</span>
+                </label>
+
+                {resetError && <p className={styles.err}>{resetError}</p>}
+
+                <div className={styles.dialogActions}>
+                  <button
+                    type="button"
+                    className={styles.cancelBtn}
+                    onClick={() => setResetUser(null)}
+                    disabled={resetting}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className={styles.createBtn}
+                    disabled={resetting}
+                  >
+                    {resetting ? "Resetting…" : "Reset password"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

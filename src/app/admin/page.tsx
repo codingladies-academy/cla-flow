@@ -10,5 +10,5 @@ export default async function AdminPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (!isAdmin(user)) redirect("/projects");
-  return <AdminPanel adminName={user.name} />;
+  return <AdminPanel adminName={user.name} currentUserId={user.id} />;
 }
