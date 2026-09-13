@@ -8,3 +8,10 @@ test-results
 playwright-report
 *.tsbuildinfo
 website
+# Dev-only files not needed in production image
+Dockerfile.dev
+docker-compose.yml
+.devcontainer
+vitest.config.ts
+playwright.config.ts
+tsconfig.e2e.json
