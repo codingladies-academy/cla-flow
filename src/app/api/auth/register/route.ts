@@ -17,6 +17,9 @@ export const POST = route(async (req: Request) => {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new HttpError(400, "That email address does not look correct.");
   }
+  if (!email.endsWith("@codingladies.org")) {
+    throw new HttpError(403, "Only @codingladies.org accounts are allowed.");
+  }
   if (typeof input.password !== "string" || input.password.length < 8) {
     throw new HttpError(400, "The password must have at least 8 characters.");
   }

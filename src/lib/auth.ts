@@ -63,6 +63,7 @@ export type CurrentUser = {
   email: string;
   name: string;
   color: string;
+  photoUrl: string | null;
 };
 
 /**
@@ -71,6 +72,12 @@ export type CurrentUser = {
  */
 export function signupIsOpen(): boolean {
   return (process.env.USHABTI_SIGNUP ?? "open").toLowerCase() !== "closed";
+}
+
+/** True when the logged-in user is the configured super admin. */
+export function isAdmin(user: CurrentUser | null): boolean {
+  const adminEmail = process.env.CLA_ADMIN_EMAIL?.toLowerCase();
+  return !!adminEmail && !!user && user.email.toLowerCase() === adminEmail;
 }
 
 /**
@@ -98,6 +105,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       email: users.email,
       name: users.name,
       color: users.color,
+      photoUrl: users.photoUrl,
     })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
@@ -107,7 +115,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   const row = rows[0];
   // An agent has no email and never holds a session, so the fallback is dead
   // code that keeps the type honest.
-  return row ? { ...row, email: row.email ?? "" } : null;
+  return row ? { ...row, email: row.email ?? "", photoUrl: row.photoUrl ?? null } : null;
 }
 
 export async function requireUser(): Promise<CurrentUser> {

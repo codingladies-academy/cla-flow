@@ -9,6 +9,9 @@ export const POST = route(async (req: Request) => {
   const email = typeof input.email === "string" ? input.email.trim().toLowerCase() : "";
   const password = typeof input.password === "string" ? input.password : "";
 
+  if (!email.endsWith("@codingladies.org")) {
+    throw new HttpError(403, "Only @codingladies.org accounts are allowed.");
+  }
   const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
   const ok = user?.passwordHash ? await verifyPassword(password, user.passwordHash) : false;
   if (!user || !ok) throw new HttpError(401, "Wrong email or password.");

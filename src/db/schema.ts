@@ -27,6 +27,8 @@ export const users = pgTable(
     /** human | agent. An agent is a member like any other, with no password. */
     kind: text("kind").notNull().default("human"),
     color: text("color").notNull().default("#6d5bd0"),
+    /** Optional profile photo. Any HTTPS URL the user supplies. */
+    photoUrl: text("photo_url"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("users_email_key").on(t.email)],

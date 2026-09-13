@@ -11,7 +11,7 @@ import { Toasts, type Toast } from "@/components/ui/Toasts";
 import { UserMenu, type SessionUser } from "@/components/ui/UserMenu";
 import styles from "./account.module.css";
 
-export function Account({ user, version }: { user: SessionUser; version: string }) {
+export function Account({ user, version, isAdmin }: { user: SessionUser; version: string; isAdmin: boolean }) {
   const router = useRouter();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const seq = useRef(0);
@@ -24,8 +24,9 @@ export function Account({ user, version }: { user: SessionUser; version: string 
 
   const [name, setName] = useState(user.name);
   const [color, setColor] = useState(user.color);
+  const [photoUrl, setPhotoUrl] = useState(user.photoUrl ?? "");
 
-  async function saveProfile(patch: { name?: string; color?: string }) {
+  async function saveProfile(patch: { name?: string; color?: string; photoUrl?: string | null }) {
     try {
       await api.patch("/api/auth/me", patch);
       router.refresh();
@@ -34,6 +35,7 @@ export function Account({ user, version }: { user: SessionUser; version: string 
       notify(err instanceof Error ? err.message : "Could not save.");
       setName(user.name);
       setColor(user.color);
+      setPhotoUrl(user.photoUrl ?? "");
     }
   }
 
@@ -45,7 +47,10 @@ export function Account({ user, version }: { user: SessionUser; version: string 
           CLA Flow
         </Link>
         <span style={{ flex: 1 }} />
-        <UserMenu user={{ ...user, name, color }} />
+        {isAdmin && (
+          <Link href="/admin" style={{ fontSize: 12, color: 'var(--text-3)', marginRight: 8 }}>Admin</Link>
+        )}
+        <UserMenu user={{ ...user, name, color, photoUrl: photoUrl || null }} />
       </div>
 
       <div className={styles.body}>
@@ -83,6 +88,39 @@ export function Account({ user, version }: { user: SessionUser; version: string 
                   if (next !== user.color) void saveProfile({ color: next });
                 }}
               />
+            </Field>
+          </Row>
+
+          <Row className={styles.stack}>
+            <Field
+              label="Profile photo"
+              note="A public HTTPS image URL. Leave blank to use your initials."
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {photoUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={photoUrl}
+                    alt="Preview"
+                    style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+                  />
+                )}
+                <Input
+                  size="lg"
+                  block
+                  aria-label="Profile photo URL"
+                  placeholder="https://example.com/photo.jpg"
+                  value={photoUrl}
+                  onChange={(e) => setPhotoUrl(e.target.value)}
+                  onBlur={() => {
+                    const trimmed = photoUrl.trim();
+                    const saved = user.photoUrl ?? "";
+                    if (trimmed !== saved) {
+                      void saveProfile({ photoUrl: trimmed || null });
+                    }
+                  }}
+                />
+              </div>
             </Field>
           </Row>
 

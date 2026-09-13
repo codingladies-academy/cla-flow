@@ -9,6 +9,7 @@ export function Avatar({
   title,
   kind = "human",
   live = false,
+  photoUrl,
 }: {
   name: string;
   color: string;
@@ -17,31 +18,60 @@ export function Avatar({
   kind?: "human" | "agent";
   /** An agent with an open run breathes, so the board shows who is at work. */
   live?: boolean;
+  photoUrl?: string | null;
 }) {
-  const face = (
-    <span
-      title={title ?? name}
-      style={{
-        width: size,
-        height: size,
-        flex: `0 0 ${size}px`,
-        borderRadius: "50%",
-        background: color,
-        color: kind === "agent" ? "#05242b" : "#fff",
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontFamily: "var(--font-mono)",
-        fontWeight: 500,
-        fontSize: Math.max(7.5, size * (kind === "agent" ? 0.5 : 0.44)),
-        letterSpacing: "0.02em",
-        userSelect: "none",
-        position: "relative",
-      }}
-    >
-      {kind === "agent" ? "◆" : initials(name)}
-    </span>
-  );
+  const face =
+    photoUrl && kind === "human" ? (
+      <span
+        title={title ?? name}
+        style={{
+          width: size,
+          height: size,
+          flex: `0 0 ${size}px`,
+          borderRadius: "50%",
+          overflow: "hidden",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          position: "relative",
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={photoUrl}
+          alt={name}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          onError={(e) => {
+            // Fall back to initials circle if the image fails to load
+            (e.currentTarget.parentElement as HTMLElement).style.background = color;
+            e.currentTarget.style.display = "none";
+          }}
+        />
+      </span>
+    ) : (
+      <span
+        title={title ?? name}
+        style={{
+          width: size,
+          height: size,
+          flex: `0 0 ${size}px`,
+          borderRadius: "50%",
+          background: color,
+          color: kind === "agent" ? "#05242b" : "#fff",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily: "var(--font-mono)",
+          fontWeight: 500,
+          fontSize: Math.max(7.5, size * (kind === "agent" ? 0.5 : 0.44)),
+          letterSpacing: "0.02em",
+          userSelect: "none",
+          position: "relative",
+        }}
+      >
+        {kind === "agent" ? "◆" : initials(name)}
+      </span>
+    );
 
   if (!live) return face;
 
