@@ -34,7 +34,7 @@ services:
     environment:
       DATABASE_URL: postgres://codingladies:${POSTGRES_PASSWORD}@db:5432/codingladies
       CLA_ADMIN_EMAIL: ${CLA_ADMIN_EMAIL:-claude@codingladies.org}
-      USHABTI_SIGNUP: closed
+      USHABTI_SIGNUP: ${USHABTI_SIGNUP:-closed}
       NODE_ENV: production
     ports:
       - "127.0.0.1:3000:3000"

@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { projectMembers, users } from "@/db/schema";
 import { HttpError } from "@/lib/auth";
 import { body, broadcast, clientIdOf, guard, json, ownerOnly, route, str } from "@/lib/api";
+import { notifyAddedToProject } from "@/lib/notifications";
 
 type Ctx = { params: Promise<{ projectId: string }> };
 
@@ -26,6 +27,7 @@ export const POST = route<Ctx>(async (req, ctx) => {
 
   await db.insert(projectMembers).values({ projectId, userId: user.id, role: "member" });
   await broadcast({ projectId, scope: "project", clientId: clientIdOf(req) });
+  void notifyAddedToProject({ projectId, userId: user.id, actorId: actor.id });
   return json(
     {
       member: {

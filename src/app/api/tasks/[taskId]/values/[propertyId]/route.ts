@@ -5,6 +5,7 @@ import { HttpError } from "@/lib/auth";
 import { body, broadcast, clientIdOf, guard, json, route } from "@/lib/api";
 import { logActivity, taskProjectId } from "@/lib/queries";
 import { coerceValue, describeValue, loadProperty, putValue } from "@/lib/values";
+import { notifyTaskAssigned } from "@/lib/notifications";
 
 type Ctx = { params: Promise<{ taskId: string; propertyId: string }> };
 
@@ -31,5 +32,8 @@ export const PUT = route<Ctx>(async (req, ctx) => {
     data: { property: prop.name, value: await describeValue(prop, value) },
   });
   await broadcast({ projectId, scope: "board", taskId, clientId: clientIdOf(req) });
+  if (prop.type === "person" && typeof value === "string" && value) {
+    void notifyTaskAssigned({ projectId, taskId, assigneeId: value, actorId: user.id });
+  }
   return json({ value });
 });

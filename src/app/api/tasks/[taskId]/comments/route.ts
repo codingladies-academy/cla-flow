@@ -3,6 +3,7 @@ import { comments } from "@/db/schema";
 import { HttpError } from "@/lib/auth";
 import { body, broadcast, clientIdOf, guard, json, route, str } from "@/lib/api";
 import { logActivity, taskProjectId } from "@/lib/queries";
+import { notifyComment } from "@/lib/notifications";
 
 type Ctx = { params: Promise<{ taskId: string }> };
 
@@ -22,6 +23,7 @@ export const POST = route<Ctx>(async (req, ctx) => {
 
   await logActivity({ projectId, taskId, actorId: user.id, kind: "comment", data: {} });
   await broadcast({ projectId, scope: "task", taskId, clientId: clientIdOf(req) });
+  void notifyComment({ projectId, taskId, commentBody: text, authorId: user.id });
   return json(
     { comment: { ...comment, author: { id: user.id, name: user.name, color: user.color } } },
     201,

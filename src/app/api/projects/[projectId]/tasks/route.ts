@@ -5,6 +5,7 @@ import { logActivity, withProjectLock } from "@/lib/queries";
 import { byPos } from "@/lib/order";
 import { rankAfter, rankBefore, rankBetween } from "@/lib/rank";
 import { coerceValue, loadProperty, putValue } from "@/lib/values";
+import { notifyTaskAssigned } from "@/lib/notifications";
 
 type Ctx = { params: Promise<{ projectId: string }> };
 
@@ -70,7 +71,11 @@ export const POST = route<Ctx>(async (req, ctx) => {
     for (const [propertyId, raw] of Object.entries(input.values)) {
       const prop = await loadProperty(propertyId);
       if (prop.projectId !== projectId) continue;
-      await putValue(task.id, propertyId, await coerceValue(prop, raw));
+      const val = await coerceValue(prop, raw);
+      await putValue(task.id, propertyId, val);
+      if (prop.type === "person" && typeof val === "string" && val) {
+        void notifyTaskAssigned({ projectId, taskId: task.id, assigneeId: val, actorId: user.id });
+      }
     }
   }
 
