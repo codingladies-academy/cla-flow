@@ -16,10 +16,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: codingladies
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cla_flow_pass_2026}
       POSTGRES_DB: codingladies
     volumes:
-      - db-data:/var/lib/postgresql
+      - cla_flow_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U codingladies -d codingladies"]
       interval: 5s
@@ -32,9 +32,9 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgres://codingladies:${POSTGRES_PASSWORD}@db:5432/codingladies
+      DATABASE_URL: postgres://codingladies:${POSTGRES_PASSWORD:-cla_flow_pass_2026}@db:5432/codingladies
       CLA_ADMIN_EMAIL: ${CLA_ADMIN_EMAIL:-claude@codingladies.org}
-      USHABTI_SIGNUP: ${USHABTI_SIGNUP:-closed}
+      USHABTI_SIGNUP: ${USHABTI_SIGNUP:-open}
       NODE_ENV: production
     ports:
       - "127.0.0.1:3000:3000"
@@ -43,4 +43,4 @@ services:
         condition: service_healthy
 
 volumes:
-  db-data:
+  cla_flow_data:
