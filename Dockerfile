@@ -1,4 +1,4 @@
-# Production image. `docker-compose.yml` builds Dockerfile.dev instead.
+# Production image for CLA Flow.
 # Node 24 is the current LTS. Do not move to an odd or a non-LTS major here.
 # syntax=docker/dockerfile:1
 

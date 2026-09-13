@@ -1,46 +1,46 @@
+# CLA Flow production deployment.
+# Coolify: point to this file or use the Dockerfile directly with a managed DB.
+#
+# Manual deploy:
+#   1. Copy .env.example to .env and fill in POSTGRES_PASSWORD + CLA_ADMIN_EMAIL
+#   2. docker compose up -d
+#   3. App listens on 127.0.0.1:3000 — put Nginx/Caddy/Coolify proxy in front
+#
+# On first start the app runs migrations automatically (scripts/migrate.mjs).
+# Create the admin account via: docker compose exec app sh
+#   then use the psql command shown in the README.
+
 services:
   db:
     image: postgres:18
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ushabti
-      POSTGRES_PASSWORD: ushabti
-      POSTGRES_DB: ushabti
-    ports:
-      - "127.0.0.1:5435:5432"
+      POSTGRES_USER: codingladies
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: codingladies
     volumes:
       - db-data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ushabti -d ushabti"]
-      interval: 3s
+      test: ["CMD-SHELL", "pg_isready -U codingladies -d codingladies"]
+      interval: 5s
       timeout: 3s
       retries: 20
 
   app:
     build:
       context: .
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
     restart: unless-stopped
-    working_dir: /workspace
-    command: sh -c "npm install && npm run db:push -- --force && npm run dev"
     environment:
-      DATABASE_URL: postgres://ushabti:ushabti@db:5432/ushabti
-      NODE_ENV: development
-      WATCHPACK_POLLING: "true"
-      CHOKIDAR_USEPOLLING: "true"
+      DATABASE_URL: postgres://codingladies:${POSTGRES_PASSWORD}@db:5432/codingladies
+      CLA_ADMIN_EMAIL: ${CLA_ADMIN_EMAIL:-claude@codingladies.org}
+      USHABTI_SIGNUP: closed
+      NODE_ENV: production
     ports:
-      # 3000 is a busy port on a development machine. The dev server keeps
-      # 3050 for itself; the shipped image still listens on 3000.
-      - "3050:3050"
-    volumes:
-      - .:/workspace
-      - node-modules:/workspace/node_modules
-      - next-cache:/workspace/.next
+      - "127.0.0.1:3000:3000"
     depends_on:
       db:
         condition: service_healthy
 
 volumes:
   db-data:
-  node-modules:
-  next-cache:

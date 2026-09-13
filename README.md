@@ -145,26 +145,16 @@ USHABTI_TOKEN=ush_demo_seed_token_not_for_real_use node examples/agent.mjs
 
 ```bash
 echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)" >> .env
-docker compose -f docker-compose.prod.yml up -d
+docker compose up -d
 ```
 
-This pulls [`jaklimoff/ushabti:edge`](https://hub.docker.com/r/jaklimoff/ushabti),
-applies the migrations and serves the app on `127.0.0.1:3000`. Add `--build` to
-build the image here instead, or set `USHABTI_VERSION` in `.env` to pin a
-released tag such as `0.1.0`.
-
-The same image is on `ghcr.io/jaklimoff/ushabti` if you prefer the GitHub
-registry. Both are built from the same commit by the same workflow.
-
-Put a reverse proxy with TLS in front of it: in production the session cookie is
-marked `secure`, so a browser will not send it back over plain `http`. Read
-[SECURITY.md](SECURITY.md) before you open it to the internet.
+This pulls or builds the image, applies the migrations and serves the app on `127.0.0.1:3000`.
 
 To upgrade:
 
 ```bash
-docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml up -d
+docker compose pull
+docker compose up -d
 ```
 
 New migrations are applied when the container starts.
