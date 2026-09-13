@@ -22,3 +22,39 @@ export const DELETE = route(async (_req: Request, { params }: { params: Promise<
 
   return json({ ok: true });
 });
+
+/** Update a staff account's details (photoUrl, name). */
+export const PATCH = route(async (req: Request, { params }: { params: Promise<{ userId: string }> }) => {
+  await requireAdmin();
+  const { userId } = await params;
+  const input = await (req.json ? req.json() : {}) as { photoUrl?: string | null; name?: string };
+
+  const patch: { photoUrl?: string | null; name?: string } = {};
+
+  if (input.photoUrl !== undefined) {
+    if (input.photoUrl === null || input.photoUrl.trim() === "") {
+      patch.photoUrl = null;
+    } else {
+      const trimmed = input.photoUrl.trim();
+      if (!/^https?:\/\//i.test(trimmed)) {
+        throw new HttpError(400, "Profile photo must be a valid URL starting with http:// or https://");
+      }
+      patch.photoUrl = trimmed;
+    }
+  }
+
+  if (input.name !== undefined && typeof input.name === "string") {
+    const trimmed = input.name.trim();
+    if (trimmed) patch.name = trimmed;
+  }
+
+  const [updated] = await db
+    .update(users)
+    .set(patch)
+    .where(eq(users.id, userId))
+    .returning({ id: users.id, name: users.name, email: users.email, photoUrl: users.photoUrl, color: users.color });
+
+  if (!updated) throw new HttpError(404, "User not found.");
+
+  return json({ user: updated });
+});

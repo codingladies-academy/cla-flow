@@ -25,6 +25,7 @@ export function AdminPanel({ adminName }: { adminName: string }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [photoUrl, setPhotoUrl] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createSuccess, setCreateSuccess] = useState<string | null>(null);
@@ -50,16 +51,37 @@ export function AdminPanel({ adminName }: { adminName: string }) {
     setCreateError(null);
     setCreateSuccess(null);
     try {
-      await api.post("/api/admin/users", { name, email, password });
+      await api.post("/api/admin/users", {
+        name,
+        email,
+        password,
+        photoUrl: photoUrl.trim() || undefined,
+      });
       setCreateSuccess(`Account created for ${email}`);
       setName("");
       setEmail("");
       setPassword("");
+      setPhotoUrl("");
       void load();
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : "Could not create account.");
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function updatePhotoUrl(userId: string, newUrl: string) {
+    const trimmed = newUrl.trim();
+    try {
+      const res = await api.patch<{ user: UserRow }>(`/api/admin/users/${userId}`, {
+        photoUrl: trimmed || null,
+      });
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, photoUrl: res.user.photoUrl } : u))
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not update photo URL.");
+      void load();
     }
   }
 
@@ -121,6 +143,25 @@ export function AdminPanel({ adminName }: { adminName: string }) {
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
+            </div>
+            <div className={styles.row} style={{ alignItems: "center" }}>
+              {photoUrl.trim() ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={photoUrl.trim()}
+                  alt="Avatar preview"
+                  className={styles.photoPreview}
+                  onError={(e) => { (e.target as HTMLElement).style.display = "none"; }}
+                  onLoad={(e) => { (e.target as HTMLElement).style.display = "block"; }}
+                />
+              ) : null}
+              <input
+                className={styles.input}
+                type="url"
+                placeholder="Profile photo URL (optional https://...)"
+                value={photoUrl}
+                onChange={(e) => setPhotoUrl(e.target.value)}
+              />
               <button className={styles.createBtn} type="submit" disabled={creating}>
                 {creating ? "Creating…" : "Create"}
               </button>
@@ -143,6 +184,7 @@ export function AdminPanel({ adminName }: { adminName: string }) {
                 <tr>
                   <th>Name</th>
                   <th>Email</th>
+                  <th>Photo URL</th>
                   <th>Joined</th>
                   <th />
                 </tr>
@@ -171,6 +213,21 @@ export function AdminPanel({ adminName }: { adminName: string }) {
                       </div>
                     </td>
                     <td className={styles.muted}>{u.email}</td>
+                    <td>
+                      <input
+                        className={styles.tablePhotoInput}
+                        key={u.photoUrl ?? "none"}
+                        defaultValue={u.photoUrl ?? ""}
+                        placeholder="Add photo URL…"
+                        title="Edit photo URL (saves on blur)"
+                        onBlur={(e) => {
+                          const val = e.target.value;
+                          if (val !== (u.photoUrl ?? "")) {
+                            void updatePhotoUrl(u.id, val);
+                          }
+                        }}
+                      />
+                    </td>
                     <td className={styles.muted}>
                       {new Date(u.createdAt).toLocaleDateString()}
                     </td>

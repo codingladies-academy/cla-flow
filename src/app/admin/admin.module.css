@@ -140,6 +140,41 @@
   cursor: default;
 }
 
+.photoPreview {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.tablePhotoInput {
+  width: 100%;
+  max-width: 240px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 12px;
+  font-family: var(--font-sans);
+  outline: none;
+  transition: border-color 120ms, background 120ms, color 120ms;
+}
+
+.tablePhotoInput:hover {
+  border-color: var(--line);
+  background: var(--bg);
+}
+
+.tablePhotoInput:focus {
+  border-color: var(--accent);
+  background: var(--bg);
+  color: var(--text-1);
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;
