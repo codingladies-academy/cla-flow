@@ -245,6 +245,58 @@
   color: #e55;
 }
 
+.createdBanner {
+  background: rgba(63, 176, 200, 0.08);
+  border: 1px solid rgba(63, 176, 200, 0.25);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.createdHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-1);
+}
+
+.inputGroup {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  position: relative;
+  align-items: center;
+}
+
+.inputGroup .input {
+  width: 100%;
+  padding-right: 75px;
+}
+
+.generateBtn {
+  position: absolute;
+  right: 4px;
+  height: 26px;
+  padding: 0 8px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text-2);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: color 120ms, border-color 120ms;
+}
+
+.generateBtn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 .ok {
   margin: 4px 0 0;
   font-size: 12.5px;

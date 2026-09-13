@@ -34,7 +34,23 @@ export function AdminPanel({
   const [photoUrl, setPhotoUrl] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [createSuccess, setCreateSuccess] = useState<string | null>(null);
+  const [createdInfo, setCreatedInfo] = useState<{
+    email: string;
+    password: string;
+    emailSent: boolean;
+  } | null>(null);
+  const [createdCopied, setCreatedCopied] = useState(false);
+
+  function generatePassword() {
+    const chars = "abcdefghjkmnpqrstuvwxyz23456789";
+    let part1 = "";
+    let part2 = "";
+    for (let i = 0; i < 4; i++) {
+      part1 += chars[Math.floor(Math.random() * chars.length)];
+      part2 += chars[Math.floor(Math.random() * chars.length)];
+    }
+    setPassword(`CLA-${part1}-${part2}`);
+  }
 
   // Reset password dialog state
   const [resetUser, setResetUser] = useState<UserRow | null>(null);
@@ -68,15 +84,23 @@ export function AdminPanel({
     e.preventDefault();
     setCreating(true);
     setCreateError(null);
-    setCreateSuccess(null);
+    setCreatedInfo(null);
     try {
-      await api.post("/api/admin/users", {
+      const res = await api.post<{
+        user: { id: string; email: string; name: string };
+        password: string;
+        emailSent: boolean;
+      }>("/api/admin/users", {
         name,
         email,
-        password,
+        password: password.trim() || undefined,
         photoUrl: photoUrl.trim() || undefined,
       });
-      setCreateSuccess(`Account created for ${email}`);
+      setCreatedInfo({
+        email: res.user.email,
+        password: res.password,
+        emailSent: res.emailSent,
+      });
       setName("");
       setEmail("");
       setPassword("");
@@ -180,15 +204,23 @@ export function AdminPanel({
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
-              <input
-                className={styles.input}
-                type="password"
-                placeholder="Temporary password (min 8 chars)"
-                value={password}
-                minLength={8}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+              <div className={styles.inputGroup}>
+                <input
+                  className={styles.input}
+                  type="text"
+                  placeholder="Password (leave blank to auto-generate)"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className={styles.generateBtn}
+                  onClick={generatePassword}
+                  title="Generate random secure password"
+                >
+                  Generate
+                </button>
+              </div>
             </div>
             <div className={styles.row} style={{ alignItems: "center" }}>
               {photoUrl.trim() ? (
@@ -213,7 +245,34 @@ export function AdminPanel({
               </button>
             </div>
             {createError && <p className={styles.err}>{createError}</p>}
-            {createSuccess && <p className={styles.ok}>{createSuccess}</p>}
+            {createdInfo && (
+              <div className={styles.createdBanner}>
+                <div className={styles.createdHeader}>
+                  <span>
+                    ✓ Account created for <strong>{createdInfo.email}</strong>!
+                  </span>
+                  {createdInfo.emailSent ? (
+                    <span style={{ color: "#3fb0c8", fontSize: 12 }}>
+                      ✓ Credentials emailed to user
+                    </span>
+                  ) : null}
+                </div>
+                <div className={styles.tempPassBox}>
+                  <code className={styles.tempPassCode}>{createdInfo.password}</code>
+                  <button
+                    type="button"
+                    className={styles.copyButton}
+                    onClick={() => {
+                      void navigator.clipboard.writeText(createdInfo.password);
+                      setCreatedCopied(true);
+                      setTimeout(() => setCreatedCopied(false), 2000);
+                    }}
+                  >
+                    {createdCopied ? "Copied!" : "Copy password"}
+                  </button>
+                </div>
+              </div>
+            )}
           </form>
         </section>
 
