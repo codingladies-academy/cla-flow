@@ -13,9 +13,24 @@ if (!connectionString) {
 
 const pool = new Pool({ connectionString, max: 1 });
 
+async function waitForDb(maxAttempts = 15, delayMs = 2000) {
+  for (let i = 1; i <= maxAttempts; i++) {
+    try {
+      const client = await pool.connect();
+      client.release();
+      return true;
+    } catch (err) {
+      console.log(`Waiting for database to accept connections (attempt ${i}/${maxAttempts})...`);
+      if (i === maxAttempts) throw err;
+      await new Promise((res) => setTimeout(res, delayMs));
+    }
+  }
+}
+
 try {
+  await waitForDb();
   await migrate(drizzle(pool), { migrationsFolder: "./drizzle" });
-  console.log("migrations applied");
+  console.log("migrations applied successfully");
 } catch (error) {
   console.error("migration failed:", error instanceof Error ? error.message : error);
   process.exitCode = 1;

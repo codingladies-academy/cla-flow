@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { projectMembers, properties, propertyOptions, taskValues } from "@/db/schema";
+import { projectMembers, properties, propertyOptions, taskValues, users } from "@/db/schema";
 import { HttpError } from "./auth";
 import type { PropertyType, TaskValue } from "./types";
 
@@ -46,14 +46,26 @@ export async function coerceValue(prop: PropertyRow, raw: unknown): Promise<Task
       return Array.from(new Set(ids));
     }
     case "person": {
-      if (typeof raw !== "string") throw new HttpError(400, `${prop.name} needs one member.`);
+      const ids = Array.isArray(raw)
+        ? raw.filter((v): v is string => typeof v === "string")
+        : typeof raw === "string"
+        ? [raw]
+        : [];
+      if (!ids.length) return null;
+      const uniqueIds = Array.from(new Set(ids));
       const rows = await db
         .select({ userId: projectMembers.userId })
         .from(projectMembers)
-        .where(and(eq(projectMembers.projectId, prop.projectId), eq(projectMembers.userId, raw)))
-        .limit(1);
-      if (!rows.length) throw new HttpError(400, "That person is not a member of this project.");
-      return raw;
+        .where(
+          and(
+            eq(projectMembers.projectId, prop.projectId),
+            inArray(projectMembers.userId, uniqueIds),
+          ),
+        );
+      if (rows.length !== uniqueIds.length) {
+        throw new HttpError(400, "One of the selected people is not a member of this project.");
+      }
+      return Array.isArray(raw) ? uniqueIds : uniqueIds[0];
     }
     case "number": {
       const n = typeof raw === "number" ? raw : Number(raw);
@@ -109,6 +121,15 @@ export async function describeValue(prop: PropertyRow, value: TaskValue): Promis
       .select({ id: propertyOptions.id, name: propertyOptions.name })
       .from(propertyOptions)
       .where(inArray(propertyOptions.id, ids));
+    const byId = new Map(rows.map((r) => [r.id, r.name]));
+    return ids.map((id) => byId.get(id) ?? "?").join(", ");
+  }
+  if (prop.type === "person") {
+    const ids = Array.isArray(value) ? value : [String(value)];
+    const rows = await db
+      .select({ id: users.id, name: users.name })
+      .from(users)
+      .where(inArray(users.id, ids));
     const byId = new Map(rows.map((r) => [r.id, r.name]));
     return ids.map((id) => byId.get(id) ?? "?").join(", ");
   }

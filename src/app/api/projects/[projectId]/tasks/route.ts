@@ -73,8 +73,13 @@ export const POST = route<Ctx>(async (req, ctx) => {
       if (prop.projectId !== projectId) continue;
       const val = await coerceValue(prop, raw);
       await putValue(task.id, propertyId, val);
-      if (prop.type === "person" && typeof val === "string" && val) {
-        void notifyTaskAssigned({ projectId, taskId: task.id, assigneeId: val, actorId: user.id });
+      if (prop.type === "person" && val) {
+        void notifyTaskAssigned({
+          projectId,
+          taskId: task.id,
+          assigneeId: val as string | string[],
+          actorId: user.id,
+        });
       }
     }
   }

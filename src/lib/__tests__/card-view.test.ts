@@ -64,6 +64,15 @@ const ADA: MemberDTO = {
   kind: "human",
 };
 
+const BOB: MemberDTO = {
+  id: "m-bob",
+  name: "Bob Babbage",
+  email: "bob@example.com",
+  color: "#00BFB3",
+  role: "member",
+  kind: "human",
+};
+
 function task(values: TaskDTO["values"] = {}, over: Partial<TaskDTO> = {}): TaskDTO {
   return {
     id: "t1",
@@ -247,6 +256,13 @@ describe("drawing a card", () => {
     expect(card.footerL).toHaveLength(0);
     /* No checklist and no comments, so the footer is not there at all. */
     expect(card.footerR).toHaveLength(0);
+  });
+
+  it("gives multi-assignees one chip per person", () => {
+    const card = buildCard(resolved, task({ "p-who": [ADA.id, BOB.id] }), [ADA, BOB]);
+    expect(card.headerR).toHaveLength(2);
+    expect(card.headerR[0].person?.name).toBe("Ada Lovelace");
+    expect(card.headerR[1].person?.name).toBe("Bob Babbage");
   });
 
   it("gives a multi-select one part per value", () => {

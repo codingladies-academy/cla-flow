@@ -523,15 +523,22 @@ function chipsFor(item: CardItem, task: TaskDTO, members: MemberDTO[]): CardChip
     }
 
     case "person": {
-      const member = members.find((m) => m.id === value);
-      if (!member) return [];
-      return [
-        chip(item, `${item.id}-${task.id}`, member.name, {
+      const ids = Array.isArray(value)
+        ? value.filter((v): v is string => typeof v === "string")
+        : typeof value === "string" && value
+        ? [value]
+        : [];
+      if (!ids.length) return [];
+      const assigned = ids
+        .map((id) => members.find((m) => m.id === id))
+        .filter((m): m is (typeof members)[number] => m !== undefined);
+      return assigned.map((member) =>
+        chip(item, `${item.id}-${task.id}-${member.id}`, member.name, {
           person: item.mode === "text" ? null : member,
           text: item.mode === "avatar" ? null : member.name,
           boxed: item.mode === "both",
         }),
-      ];
+      );
     }
 
     case "date": {

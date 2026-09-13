@@ -126,8 +126,16 @@ function keyOf(item: CardItem, task: TaskDTO, members: MemberDTO[]): SortKey {
       return best;
     }
     case "person": {
-      const member = members.find((m) => m.id === value);
-      return member ? member.name : null;
+      const ids = Array.isArray(value)
+        ? value.filter((v): v is string => typeof v === "string")
+        : typeof value === "string" && value
+        ? [value]
+        : [];
+      if (!ids.length) return null;
+      const names = ids
+        .map((id) => members.find((m) => m.id === id)?.name)
+        .filter(Boolean);
+      return names.length ? names.join(", ") : null;
     }
     case "date":
       /* An ISO date compares as words and comes out chronological. */

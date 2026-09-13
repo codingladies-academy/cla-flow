@@ -61,17 +61,39 @@ function Members() {
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [staffList, setStaffList] = useState<
+    { id: string; name: string; email: string; color: string; photoUrl: string | null }[]
+  >([]);
+  const [focused, setFocused] = useState(false);
   const isOwner = data.project.role === "owner";
-  const origin = useSyncExternalStore(
-    subscribeNothing,
-    () => window.location.origin,
-    () => "",
-  );
-  const signUpLink = origin ? `${origin}/register` : "";
 
-  async function invite() {
-    const value = email.trim();
+  useEffect(() => {
+    let alive = true;
+    void api
+      .get<{ staff: typeof staffList }>("/api/staff")
+      .then((res) => {
+        if (alive) setStaffList(res.staff);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function invite(targetEmail?: string) {
+    const value = (targetEmail ?? email).trim();
     if (!value || busy) return;
+
+    if (staffList.length > 0) {
+      const isRegistered = staffList.some(
+        (s) => s.email.toLowerCase() === value.toLowerCase(),
+      );
+      if (!isRegistered) {
+        setError("Only registered staff can be added.");
+        return;
+      }
+    }
+
     setBusy(true);
     setError(null);
     try {
@@ -97,11 +119,20 @@ function Members() {
   }
 
   const people = data.members.filter((m) => m.kind === "human");
-  const unknownEmail = error !== null && error.includes("No account");
+  const availableStaff = staffList.filter(
+    (s) => !people.some((m) => m.id === s.id || (m.email && m.email.toLowerCase() === s.email.toLowerCase())),
+  );
+  const query = email.trim().toLowerCase();
+  const suggestions = query
+    ? availableStaff.filter(
+        (s) =>
+          s.name.toLowerCase().includes(query) || s.email.toLowerCase().includes(query),
+      )
+    : [];
 
   return (
     <Section title="Members">
-      <Card>
+      <Card className={styles.cardOverflow}>
         {people.map((member) => (
           <MemberRow
             key={member.id}
@@ -114,18 +145,57 @@ function Members() {
 
         {isOwner && (
           <Foot>
-            <Input
-              style={{ flex: 1, minWidth: 180 }}
-              aria-label="Email of the new member"
-              value={email}
-              invalid={error !== null}
-              placeholder="friend@example.com"
-              onChange={(e) => {
-                setEmail(e.target.value);
-                setError(null);
-              }}
-              onKeyDown={(e) => e.key === "Enter" && void invite()}
-            />
+            <div className={styles.suggestWrap}>
+              <Input
+                style={{ width: "100%", minWidth: 180 }}
+                aria-label="Staff member name or email"
+                value={email}
+                invalid={error !== null}
+                placeholder="Type staff name or email…"
+                onFocus={() => setFocused(true)}
+                onBlur={() => {
+                  setTimeout(() => setFocused(false), 200);
+                }}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    if (suggestions.length === 1) {
+                      void invite(suggestions[0].email);
+                    } else {
+                      void invite();
+                    }
+                  }
+                }}
+              />
+              {focused && suggestions.length > 0 && (
+                <div className={styles.suggestBox}>
+                  {suggestions.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className={styles.suggestItem}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setEmail(s.email);
+                        void invite(s.email);
+                      }}
+                    >
+                      <Avatar
+                        name={s.name}
+                        color={s.color}
+                        size={20}
+                        photoUrl={s.photoUrl}
+                      />
+                      <span className={styles.suggestName}>{s.name}</span>
+                      <span className={styles.suggestEmail}>{s.email}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <Button onClick={() => void invite()} disabled={busy}>
               {busy ? "Adding…" : "Add member"}
             </Button>
@@ -134,17 +204,11 @@ function Members() {
                 <span style={{ fontSize: 11.5, color: "var(--danger-text)" }} role="alert">
                   {error}
                 </span>
-                {unknownEmail && signUpLink && (
-                  <>
-                    <Note>Send them the sign-up link, then add their email here.</Note>
-                    <CopyField value={signUpLink} label="the sign-up link" />
-                  </>
-                )}
               </div>
             ) : (
               <span style={{ width: "100%" }}>
                 <Note>
-                  The person needs a CLA Flow account first. There are no email invites yet.
+                  Only registered staff can be added to this project.
                 </Note>
               </span>
             )}

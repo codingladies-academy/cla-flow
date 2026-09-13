@@ -32,8 +32,13 @@ export const PUT = route<Ctx>(async (req, ctx) => {
     data: { property: prop.name, value: await describeValue(prop, value) },
   });
   await broadcast({ projectId, scope: "board", taskId, clientId: clientIdOf(req) });
-  if (prop.type === "person" && typeof value === "string" && value) {
-    void notifyTaskAssigned({ projectId, taskId, assigneeId: value, actorId: user.id });
+  if (prop.type === "person" && value) {
+    void notifyTaskAssigned({
+      projectId,
+      taskId,
+      assigneeId: value as string | string[],
+      actorId: user.id,
+    });
   }
   return json({ value });
 });

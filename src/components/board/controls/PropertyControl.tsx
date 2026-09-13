@@ -273,7 +273,31 @@ function MultiSelect({ property, value, onChange, onAddOption }: Props) {
 function PersonMenu({ value, members, onChange }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useDismiss<HTMLDivElement>(() => setOpen(false), open);
-  const current = members.find((m) => m.id === value);
+
+  const selectedIds = Array.isArray(value)
+    ? value.filter((v): v is string => typeof v === "string")
+    : typeof value === "string" && value
+    ? [value]
+    : [];
+
+  const selectedMembers = selectedIds
+    .map((id) => members.find((m) => m.id === id))
+    .filter((m): m is MemberDTO => !!m);
+
+  function toggle(id: string) {
+    if (selectedIds.includes(id)) {
+      const next = selectedIds.filter((x) => x !== id);
+      onChange(next.length === 0 ? null : next.length === 1 ? next[0] : next);
+    } else {
+      const next = [...selectedIds, id];
+      onChange(next.length === 1 ? next[0] : next);
+    }
+  }
+
+  function clear() {
+    onChange(null);
+    setOpen(false);
+  }
 
   return (
     <div className={styles.wrap} ref={ref}>
@@ -281,13 +305,26 @@ function PersonMenu({ value, members, onChange }: Props) {
         className={`${styles.trigger} ${styles.triggerAvatar} ${open ? styles.triggerOpen : ""}`}
         onClick={() => setOpen((v) => !v)}
       >
-        {current ? (
-          <Avatar
-            name={current.name}
-            color={current.color}
-            size={18}
-            photoUrl={current.photoUrl}
-          />
+        {selectedMembers.length > 0 ? (
+          <div style={{ display: "inline-flex", alignItems: "center", marginRight: 2 }}>
+            {selectedMembers.map((m, idx) => (
+              <span
+                key={m.id}
+                style={{
+                  marginLeft: idx === 0 ? 0 : -6,
+                  zIndex: selectedMembers.length - idx,
+                  display: "inline-flex",
+                }}
+              >
+                <Avatar
+                  name={m.name}
+                  color={m.color}
+                  size={18}
+                  photoUrl={m.photoUrl}
+                />
+              </span>
+            ))}
+          </div>
         ) : (
           <span
             style={{
@@ -299,20 +336,20 @@ function PersonMenu({ value, members, onChange }: Props) {
             }}
           />
         )}
-        <span className={`${styles.triggerText} ${current ? "" : styles.triggerEmpty}`}>
-          {current?.name ?? "Unassigned"}
+        <span
+          className={`${styles.triggerText} ${selectedMembers.length ? "" : styles.triggerEmpty}`}
+        >
+          {selectedMembers.length === 0
+            ? "Unassigned"
+            : selectedMembers.length === 1
+            ? selectedMembers[0].name
+            : selectedMembers.map((m) => m.name.split(" ")[0] || m.name).join(", ")}
         </span>
         <span className={styles.caret}>▾</span>
       </button>
       {open && (
-        <div className={styles.menu} style={{ top: 32 }}>
-          <button
-            className={styles.menuItem}
-            onClick={() => {
-              onChange(null);
-              setOpen(false);
-            }}
-          >
+        <div className={styles.menu} style={{ top: 32, minWidth: 200 }}>
+          <button className={styles.menuItem} onClick={clear}>
             <span
               style={{
                 width: 18,
@@ -326,36 +363,36 @@ function PersonMenu({ value, members, onChange }: Props) {
             <span style={{ flex: 1 }} />
             <span
               className={styles.tick}
-              style={{ color: value ? "transparent" : "var(--accent)" }}
+              style={{ color: selectedMembers.length === 0 ? "var(--accent)" : "transparent" }}
             >
               ✓
             </span>
           </button>
-          {members.map((member) => (
-            <button
-              key={member.id}
-              className={`${styles.menuItem} ${value === member.id ? styles.menuItemOn : ""}`}
-              onClick={() => {
-                onChange(member.id);
-                setOpen(false);
-              }}
-            >
-              <Avatar
-                name={member.name}
-                color={member.color}
-                size={18}
-                photoUrl={member.photoUrl}
-              />
-              {member.name}
-              <span style={{ flex: 1 }} />
-              <span
-                className={styles.tick}
-                style={{ color: value === member.id ? "var(--accent)" : "transparent" }}
+          {members.map((member) => {
+            const isSelected = selectedIds.includes(member.id);
+            return (
+              <button
+                key={member.id}
+                className={`${styles.menuItem} ${isSelected ? styles.menuItemOn : ""}`}
+                onClick={() => toggle(member.id)}
               >
-                ✓
-              </span>
-            </button>
-          ))}
+                <Avatar
+                  name={member.name}
+                  color={member.color}
+                  size={18}
+                  photoUrl={member.photoUrl}
+                />
+                {member.name}
+                <span style={{ flex: 1 }} />
+                <span
+                  className={styles.tick}
+                  style={{ color: isSelected ? "var(--accent)" : "transparent" }}
+                >
+                  ✓
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

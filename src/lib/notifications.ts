@@ -76,19 +76,13 @@ export async function notifyTaskAssigned({
 }: {
   projectId: string;
   taskId: string;
-  assigneeId: string;
+  assigneeId: string | string[];
   actorId: string;
 }) {
   try {
-    if (assigneeId === actorId) return;
-
-    const [assignee] = await db
-      .select({ email: users.email, name: users.name })
-      .from(users)
-      .where(eq(users.id, assigneeId))
-      .limit(1);
-
-    if (!assignee || !assignee.email) return;
+    const ids = Array.isArray(assigneeId) ? assigneeId : [assigneeId];
+    const targetIds = ids.filter((id) => id && id !== actorId);
+    if (!targetIds.length) return;
 
     const [actor] = await db
       .select({ name: users.name })
@@ -115,23 +109,33 @@ export async function notifyTaskAssigned({
     const actorName = actor?.name || "A team member";
     const taskUrl = `${getAppUrl()}/p/${projectId}?task=${taskId}`;
 
-    await emailSender.sendEmail({
-      to: assignee.email,
-      email: assignee.email,
-      subject: `Assigned to ${taskKey}: ${task.title}`,
-      first_name: assignee.name.split(" ")[0] || assignee.name,
-      html: `
-        <p>Hello <strong>${assignee.name}</strong>,</p>
-        <p><strong>${actorName}</strong> assigned you to a task in <strong>${projectName}</strong>:</p>
-        <div style="background: #f0fdfa; border-left: 4px solid #00BFB3; border-radius: 6px; padding: 14px 18px; margin: 18px 0;">
-          <div style="font-size: 12px; font-weight: bold; color: #00BFB3; margin-bottom: 4px;">${taskKey}</div>
-          <div style="font-size: 15px; font-weight: 600; color: #111827;">${task.title}</div>
-        </div>
-        <div style="text-align: center; margin: 24px 0;">
-          <a href="${taskUrl}" class="button" style="background-color: #00BFB3; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: bold; display: inline-block;">View Task</a>
-        </div>
-      `,
-    });
+    for (const id of targetIds) {
+      const [assignee] = await db
+        .select({ email: users.email, name: users.name })
+        .from(users)
+        .where(eq(users.id, id))
+        .limit(1);
+
+      if (!assignee || !assignee.email) continue;
+
+      await emailSender.sendEmail({
+        to: assignee.email,
+        email: assignee.email,
+        subject: `Assigned to ${taskKey}: ${task.title}`,
+        first_name: assignee.name.split(" ")[0] || assignee.name,
+        html: `
+          <p>Hello <strong>${assignee.name}</strong>,</p>
+          <p><strong>${actorName}</strong> assigned you to a task in <strong>${projectName}</strong>:</p>
+          <div style="background: #f0fdfa; border-left: 4px solid #00BFB3; border-radius: 6px; padding: 14px 18px; margin: 18px 0;">
+            <div style="font-size: 12px; font-weight: bold; color: #00BFB3; margin-bottom: 4px;">${taskKey}</div>
+            <div style="font-size: 15px; font-weight: 600; color: #111827;">${task.title}</div>
+          </div>
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${taskUrl}" class="button" style="background-color: #00BFB3; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: bold; display: inline-block;">View Task</a>
+          </div>
+        `,
+      });
+    }
   } catch (err) {
     console.error("Failed to send task assigned notification:", err);
   }
@@ -192,6 +196,12 @@ export async function notifyComment({
     for (const pv of personValues) {
       if (typeof pv.value === "string" && pv.value && pv.value !== authorId) {
         recipientIds.add(pv.value);
+      } else if (Array.isArray(pv.value)) {
+        for (const id of pv.value) {
+          if (typeof id === "string" && id && id !== authorId) {
+            recipientIds.add(id);
+          }
+        }
       }
     }
 
