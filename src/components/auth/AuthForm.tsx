@@ -44,9 +44,11 @@ export function AuthForm({ mode, signupOpen = true }: { mode: Mode; signupOpen?:
       <div className={styles.wrap}>
         <div className={styles.card}>
           <Brand />
-          <h1 className={styles.h1}>This board is closed</h1>
+          <h1 className={styles.h1}>CLA Flow is invite-only</h1>
           <p className={styles.tagline}>
-            It is not taking new accounts. Ask whoever runs it to make one for you.
+            This tool is for Coding Ladies Academy staff only.
+            <br />
+            Contact your admin to get an account.
           </p>
           <div className={styles.switch}>
             Already have an account? <Link href="/login">Sign in</Link>
