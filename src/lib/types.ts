@@ -64,6 +64,7 @@ export type MemberDTO = {
   /** Null for an agent. Only a person has an email address. */
   email: string | null;
   color: string;
+  photoUrl?: string | null;
   role: string;
   kind: "human" | "agent";
 };
@@ -319,7 +320,7 @@ export type CommentDTO = {
   id: string;
   body: string;
   createdAt: string;
-  author: { id: string; name: string; color: string } | null;
+  author: { id: string; name: string; color: string; photoUrl?: string | null } | null;
 };
 
 export type ActivityDTO = {
@@ -327,7 +328,7 @@ export type ActivityDTO = {
   kind: string;
   data: Record<string, unknown>;
   createdAt: string;
-  actor: { id: string; name: string; color: string } | null;
+  actor: { id: string; name: string; color: string; photoUrl?: string | null } | null;
 };
 
 export type TaskDetailDTO = TaskDTO & {

@@ -1,6 +1,6 @@
 import "server-only";
 import { byPos } from "@/lib/order";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   activity,
@@ -96,6 +96,19 @@ export async function createProject(userId: string, name: string, key: string) {
       userId,
       role: "owner",
     });
+
+    // In internal org use, add all other staff members as project members
+    const otherStaff = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.kind, "human"), ne(users.id, userId)));
+
+    if (otherStaff.length) {
+      await tx
+        .insert(projectMembers)
+        .values(otherStaff.map((u) => ({ projectId: project.id, userId: u.id, role: "member" })))
+        .onConflictDoNothing();
+    }
 
     const propRanks = rankSequence(DEFAULT_PROPERTIES.length);
     const byName = new Map<string, string>();
@@ -246,6 +259,7 @@ export async function loadBoard(projectId: string, role: string): Promise<BoardD
         name: users.name,
         email: users.email,
         color: users.color,
+        photoUrl: users.photoUrl,
         kind: users.kind,
         role: projectMembers.role,
       })
@@ -343,6 +357,7 @@ export async function loadBoard(projectId: string, role: string): Promise<BoardD
     name: m.name,
     email: m.email,
     color: m.color,
+    photoUrl: m.photoUrl ?? null,
     role: m.role,
     kind: m.kind === "agent" ? "agent" : "human",
   }));
@@ -402,6 +417,7 @@ export async function loadTaskDetail(taskId: string): Promise<TaskDetailDTO | nu
         authorId: users.id,
         authorName: users.name,
         authorColor: users.color,
+        authorPhotoUrl: users.photoUrl,
       })
       .from(comments)
       .leftJoin(users, eq(users.id, comments.authorId))
@@ -416,6 +432,7 @@ export async function loadTaskDetail(taskId: string): Promise<TaskDetailDTO | nu
         actorId: users.id,
         actorName: users.name,
         actorColor: users.color,
+        actorPhotoUrl: users.photoUrl,
       })
       .from(activity)
       .leftJoin(users, eq(users.id, activity.actorId))
@@ -439,7 +456,14 @@ export async function loadTaskDetail(taskId: string): Promise<TaskDetailDTO | nu
     id: c.id,
     body: c.body,
     createdAt: c.createdAt.toISOString(),
-    author: c.authorId ? { id: c.authorId, name: c.authorName!, color: c.authorColor! } : null,
+    author: c.authorId
+      ? {
+          id: c.authorId,
+          name: c.authorName!,
+          color: c.authorColor!,
+          photoUrl: c.authorPhotoUrl ?? null,
+        }
+      : null,
   }));
 
   const activityList: ActivityDTO[] = activityRows.map((a) => ({
@@ -447,7 +471,14 @@ export async function loadTaskDetail(taskId: string): Promise<TaskDetailDTO | nu
     kind: a.kind,
     data: (a.data ?? {}) as Record<string, unknown>,
     createdAt: a.createdAt.toISOString(),
-    actor: a.actorId ? { id: a.actorId, name: a.actorName!, color: a.actorColor! } : null,
+    actor: a.actorId
+      ? {
+          id: a.actorId,
+          name: a.actorName!,
+          color: a.actorColor!,
+          photoUrl: a.actorPhotoUrl ?? null,
+        }
+      : null,
   }));
 
   return {

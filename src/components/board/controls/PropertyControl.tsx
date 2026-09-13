@@ -282,7 +282,12 @@ function PersonMenu({ value, members, onChange }: Props) {
         onClick={() => setOpen((v) => !v)}
       >
         {current ? (
-          <Avatar name={current.name} color={current.color} size={18} />
+          <Avatar
+            name={current.name}
+            color={current.color}
+            size={18}
+            photoUrl={current.photoUrl}
+          />
         ) : (
           <span
             style={{
@@ -335,7 +340,12 @@ function PersonMenu({ value, members, onChange }: Props) {
                 setOpen(false);
               }}
             >
-              <Avatar name={member.name} color={member.color} size={18} />
+              <Avatar
+                name={member.name}
+                color={member.color}
+                size={18}
+                photoUrl={member.photoUrl}
+              />
               {member.name}
               <span style={{ flex: 1 }} />
               <span

@@ -33,17 +33,38 @@ export function Avatar({
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
+          background: color,
+          color: "#fff",
           position: "relative",
+          fontFamily: "var(--font-mono)",
+          fontWeight: 500,
+          fontSize: Math.max(7.5, size * 0.44),
+          letterSpacing: "0.02em",
+          userSelect: "none",
         }}
       >
+        <span
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {initials(name)}
+        </span>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={photoUrl}
           alt={name}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          style={{
+            position: "relative",
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+          }}
           onError={(e) => {
-            // Fall back to initials circle if the image fails to load
-            (e.currentTarget.parentElement as HTMLElement).style.background = color;
             e.currentTarget.style.display = "none";
           }}
         />

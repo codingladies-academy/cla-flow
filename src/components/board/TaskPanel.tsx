@@ -858,7 +858,7 @@ function Comments({
 }: {
   taskId: string;
   detail: TaskDetailDTO;
-  me: { id: string; name: string; color: string };
+  me: { id: string; name: string; color: string; photoUrl?: string | null };
   reload: () => Promise<void>;
   onError: (message: string) => void;
 }) {
@@ -889,6 +889,7 @@ function Comments({
             name={comment.author?.name ?? "?"}
             color={comment.author?.color ?? "#3f4650"}
             size={20}
+            photoUrl={comment.author?.photoUrl}
           />
           <div className={styles.commentBody}>
             <div className={styles.commentHead}>
@@ -919,7 +920,7 @@ function Comments({
       ))}
 
       <div className={styles.composer}>
-        <Avatar name={me.name} color={me.color} size={24} />
+        <Avatar name={me.name} color={me.color} size={24} photoUrl={me.photoUrl} />
         <div className={styles.composerBox}>
           <textarea
             className={styles.composerInput}

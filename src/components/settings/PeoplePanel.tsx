@@ -185,7 +185,12 @@ function MemberRow({
 
   return (
     <Row>
-      <Avatar name={member.name} color={member.color} size={22} />
+      <Avatar
+        name={member.name}
+        color={member.color}
+        size={22}
+        photoUrl={member.photoUrl}
+      />
       <span className={styles.memberName}>{member.name}</span>
       <span className={styles.memberMail}>{member.email}</span>
       {member.role === "owner" && <Tag accent>owner</Tag>}

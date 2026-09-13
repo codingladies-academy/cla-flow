@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { users } from "@/db/schema";
+import { projectMembers, projects, users } from "@/db/schema";
 import { getCurrentUser, hashPassword, HttpError, isAdmin } from "@/lib/auth";
 import { body, json, route, str } from "@/lib/api";
 import { pickAvatarColor } from "@/lib/colors";
@@ -78,6 +78,15 @@ export const POST = route(async (req: Request) => {
       photoUrl,
     })
     .returning({ id: users.id, email: users.email, name: users.name, photoUrl: users.photoUrl });
+
+  // In internal org use, add new staff member to all existing projects
+  const allProjects = await db.select({ id: projects.id }).from(projects);
+  if (allProjects.length) {
+    await db
+      .insert(projectMembers)
+      .values(allProjects.map((p) => ({ projectId: p.id, userId: user.id, role: "member" })))
+      .onConflictDoNothing();
+  }
 
   // Send welcome email with credentials
   let emailSent = false;
