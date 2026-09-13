@@ -81,7 +81,7 @@ function Chrome({ version, children }: { version: string; children: React.ReactN
             >
               How agents work
             </a>
-            <span className={styles.railVersion}>Ushabti {version}</span>
+            <span className={styles.railVersion}>CLA Flow {version}</span>
           </div>
         </nav>
 

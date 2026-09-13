@@ -17,9 +17,9 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  // Three boards open in three tabs all read "Ushabti" before this.
-  title: { default: "Ushabti", template: "%s" },
-  description: "A small, fast task board with properties you define yourself.",
+  // Three boards open in three tabs all read "CLA Flow" before this.
+  title: { default: "CLA Flow", template: "%s" },
+  description: "CLA Flow — manage staff tasks and projects for Coding Ladies Academy.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

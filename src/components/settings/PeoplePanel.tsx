@@ -144,7 +144,7 @@ function Members() {
             ) : (
               <span style={{ width: "100%" }}>
                 <Note>
-                  The person needs an Ushabti account first. There are no email invites yet.
+                  The person needs a CLA Flow account first. There are no email invites yet.
                 </Note>
               </span>
             )}

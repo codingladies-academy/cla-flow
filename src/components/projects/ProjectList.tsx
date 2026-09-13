@@ -49,8 +49,8 @@ export function ProjectList({ user, projects }: { user: SessionUser; projects: P
   return (
     <div className={styles.page}>
       <div className={styles.bar}>
-        <div className={styles.mark}>U</div>
-        <div className={styles.brand}>Ushabti</div>
+        <img src="https://codingladies.org/favicon.ico" alt="CLA Flow" className={styles.mark} style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'contain' }} />
+        <div className={styles.brand}>CLA Flow</div>
         <div className={styles.spacer} />
         <UserMenu user={user} />
       </div>
