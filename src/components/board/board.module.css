@@ -149,6 +149,7 @@
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--muted);
+  border: 1px solid transparent;
   /* The strip pans on a touch screen, exactly as a column does. */
   touch-action: manipulation;
   transition:
@@ -160,8 +161,8 @@
 .pillLifted {
   z-index: 2;
   opacity: 0.9;
-  background: #171b20;
-  box-shadow: 0 6px 18px #00000055;
+  background: var(--bg-card-hover);
+  box-shadow: var(--shadow-drag);
 }
 
 .pill:hover {
@@ -169,8 +170,10 @@
 }
 
 .pillActive {
-  background: #171b20;
+  background: var(--bg-card);
   color: var(--text);
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .pillDot {
@@ -187,7 +190,7 @@
   display: grid;
   place-items: center;
   border-radius: 5px;
-  color: #5d646f;
+  color: var(--icon);
   font-size: 14px;
   transition:
     background 140ms var(--ease),
@@ -294,8 +297,9 @@
 }
 
 .chipOn {
-  background: #1b2126;
+  background: var(--bg-hover);
   color: var(--text);
+  border: 1px solid var(--line);
 }
 
 .dot6 {
@@ -322,7 +326,7 @@
 .ghost {
   padding: 4px 9px;
   border-radius: 5px;
-  border: 1px solid #1f2229;
+  border: 1px solid var(--line);
   color: var(--muted);
   font-size: 11.5px;
 }
@@ -377,7 +381,7 @@
 
 .columnOver {
   border-color: rgba(63, 176, 200, 0.42);
-  background: #0f1216;
+  background: var(--bg-hover);
 }
 
 .columnDragging {
@@ -445,7 +449,7 @@
   font-weight: 500;
   letter-spacing: 0.11em;
   text-transform: uppercase;
-  color: #d5dae1;
+  color: var(--text-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -454,10 +458,11 @@
 .colCount {
   padding: 1px 6px;
   border-radius: 20px;
-  background: #161a1e;
+  background: var(--bg-hover);
+  border: 1px solid var(--line);
   font-family: var(--font-mono);
   font-size: 10.5px;
-  color: #6b727d;
+  color: var(--muted);
 }
 
 .colAdd {
@@ -466,7 +471,7 @@
   display: grid;
   place-items: center;
   border-radius: 5px;
-  color: #5d646f;
+  color: var(--icon);
   font-size: 14px;
   transition:
     background 140ms var(--ease),
@@ -536,6 +541,8 @@
   border-radius: 6px;
   overflow: hidden;
   background: var(--bg-card);
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   cursor: pointer;
   touch-action: manipulation;
   transition:
@@ -569,7 +576,7 @@
 .cardOverlay {
   cursor: grabbing;
   box-shadow: var(--shadow-drag);
-  background: #1a1e24;
+  background: var(--bg-card-hover);
   transform: rotate(1.4deg) scale(1.028);
   animation: ushabti-pickup 160ms var(--ease);
 }
@@ -636,7 +643,7 @@
 
 .cardChipBoxed {
   padding: 2px 6px 2px 5px;
-  border: 1px solid #23262c;
+  border: 1px solid var(--line-dash);
   border-radius: 4px;
 }
 
@@ -694,7 +701,7 @@
 .cardTitle {
   font-size: 12.5px;
   line-height: 1.35;
-  color: var(--text-3);
+  color: var(--text);
   text-wrap: pretty;
   word-break: break-word;
 }
@@ -710,7 +717,7 @@
   width: 34px;
   height: 3px;
   border-radius: 2px;
-  background: #1c2126;
+  background: var(--line);
   overflow: hidden;
 }
 
@@ -1071,7 +1078,7 @@ button.listHeadCell:focus-visible {
 .listRowOverlay {
   cursor: grabbing;
   border-radius: 6px;
-  background: #1a1e24;
+  background: var(--bg-card-hover);
   box-shadow: var(--shadow-drag);
 }
 
@@ -1306,8 +1313,9 @@ button.listHeadCell:focus-visible {
 }
 
 .filterOn {
-  background: #171b20;
+  background: var(--bg-hover);
   color: var(--text);
+  border: 1px solid var(--line);
 }
 
 /* Three bars, narrowing. A funnel at this size is a smudge. */
@@ -1352,7 +1360,7 @@ button.listHeadCell:focus-visible {
   height: 20px;
   padding: 0 6px;
   border-radius: 4px;
-  background: #1b2126;
+  background: var(--bg-hover);
   color: var(--text-3);
   font-family: var(--font-mono);
   font-size: 10px;
@@ -1365,7 +1373,7 @@ button.listHeadCell:focus-visible {
 }
 
 .askTag:hover {
-  background: var(--bg-hover);
+  background: var(--bg-card-hover);
   color: var(--text);
 }
 
@@ -1375,7 +1383,7 @@ button.listHeadCell:focus-visible {
 }
 
 .askTagFlat:hover {
-  background: #1b2126;
+  background: var(--bg-hover);
   color: var(--text-3);
 }
 
@@ -1482,7 +1490,7 @@ button.listHeadCell:focus-visible {
   align-items: center;
   height: 22px;
   border-radius: 5px;
-  background: #171b20;
+  background: var(--bg-card);
   border: 1px solid var(--line);
   white-space: nowrap;
   transition: border-color 140ms var(--ease);

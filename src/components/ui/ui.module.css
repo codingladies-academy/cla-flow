@@ -269,7 +269,7 @@
   gap: var(--s-2);
   padding: 12px 13px;
   border-top: 1px solid var(--line-soft);
-  background: #0b0c0f;
+  background: var(--bg-sub);
 }
 
 .spacer {
@@ -290,13 +290,15 @@
 }
 
 .tagNeutral {
-  background: #171b20;
-  color: var(--muted);
+  background: var(--bg-hover);
+  color: var(--text-2);
+  border: 1px solid var(--line);
 }
 
 .tagAccent {
   background: rgba(63, 176, 200, 0.14);
-  color: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid rgba(63, 176, 200, 0.28);
 }
 
 /* ---- empty state --------------------------------------------------- */

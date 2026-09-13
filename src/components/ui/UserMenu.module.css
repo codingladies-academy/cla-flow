@@ -7,7 +7,7 @@
   align-items: center;
   gap: 8px;
   padding: 3px 10px 3px 4px;
-  border: 1px solid #1f2229;
+  border: 1px solid var(--line);
   background: var(--bg-card);
   border-radius: 5px;
   transition:
@@ -17,7 +17,7 @@
 
 .button:hover {
   background: var(--bg-card-hover);
-  border-color: #2a323a;
+  border-color: var(--line-strong);
 }
 
 /* A long name used to push the whole top bar. The board crumb already
@@ -77,7 +77,7 @@
 }
 
 .item:hover {
-  background: #1b2126;
+  background: var(--bg-hover);
   color: var(--text);
 }
 

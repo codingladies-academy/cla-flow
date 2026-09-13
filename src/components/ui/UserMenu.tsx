@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/lib/client";
+import { useTheme } from "@/lib/theme";
 import { Avatar } from "./Avatar";
 import { useDismiss } from "./useDismiss";
 import styles from "./UserMenu.module.css";
@@ -14,6 +15,7 @@ export function UserMenu({ user, extra }: { user: SessionUser; extra?: React.Rea
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const ref = useDismiss<HTMLDivElement>(() => setOpen(false), open);
+  const { theme, toggle: toggleTheme } = useTheme();
 
   async function signOut() {
     await api.post("/api/auth/logout");
@@ -53,6 +55,18 @@ export function UserMenu({ user, extra }: { user: SessionUser; extra?: React.Rea
           >
             All projects
           </Link>
+          <button
+            className={styles.item}
+            role="menuitem"
+            onClick={() => {
+              toggleTheme();
+            }}
+          >
+            <span style={{ fontSize: 13, width: 16, textAlign: "center", display: "inline-block" }}>
+              {theme === "dark" ? "☀️" : "🌙"}
+            </span>
+            <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+          </button>
           <div className={styles.rule} />
           <button className={styles.item} role="menuitem" onClick={signOut}>
             Sign out

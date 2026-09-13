@@ -9,6 +9,7 @@ import { ColorSwatches, Field, Input } from "@/components/ui/Form";
 import { Card, Note, Row, Section, Spacer } from "@/components/ui/Layout";
 import { Toasts, type Toast } from "@/components/ui/Toasts";
 import { UserMenu, type SessionUser } from "@/components/ui/UserMenu";
+import { useTheme } from "@/lib/theme";
 import styles from "./account.module.css";
 
 export function Account({ user, version, isAdmin }: { user: SessionUser; version: string; isAdmin: boolean }) {
@@ -25,6 +26,7 @@ export function Account({ user, version, isAdmin }: { user: SessionUser; version
   const [name, setName] = useState(user.name);
   const [color, setColor] = useState(user.color);
   const [photoUrl, setPhotoUrl] = useState(user.photoUrl ?? "");
+  const { theme, setTheme } = useTheme();
 
   async function saveProfile(patch: { name?: string; color?: string; photoUrl?: string | null }) {
     try {
@@ -127,6 +129,27 @@ export function Account({ user, version, isAdmin }: { user: SessionUser; version
           <Row className={styles.stack}>
             <Field label="Email" note="You sign in with this. It cannot be changed yet.">
               <span className={styles.readonly}>{user.email}</span>
+            </Field>
+          </Row>
+        </Card>
+
+        <Card>
+          <Row className={styles.stack}>
+            <Field label="Theme" note="Choose your preferred appearance for CLA Flow.">
+              <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                <Button
+                  variant={theme === "dark" ? "primary" : "ghost"}
+                  onClick={() => setTheme("dark")}
+                >
+                  <span style={{ marginRight: 6 }}>🌙</span> Dark
+                </Button>
+                <Button
+                  variant={theme === "light" ? "primary" : "ghost"}
+                  onClick={() => setTheme("light")}
+                >
+                  <span style={{ marginRight: 6 }}>☀️</span> Light
+                </Button>
+              </div>
             </Field>
           </Row>
         </Card>

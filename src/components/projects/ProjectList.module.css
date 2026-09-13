@@ -67,7 +67,7 @@
   flex-direction: column;
   gap: 10px;
   padding: 14px 15px 13px;
-  background: var(--bg-column);
+  background: var(--bg-card);
   border: 1px solid var(--line);
   border-radius: 10px;
   transition:
@@ -77,8 +77,8 @@
 }
 
 .card:hover {
-  border-color: #2a323a;
-  background: #101216;
+  border-color: var(--line-strong);
+  background: var(--bg-card-hover);
   transform: translateY(-1px);
 }
 
@@ -92,7 +92,7 @@
   padding: 1px 6px;
   border-radius: 4px;
   background: rgba(63, 176, 200, 0.14);
-  color: var(--accent-soft);
+  color: var(--accent);
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 500;
@@ -129,8 +129,8 @@
 }
 
 .newCard:hover {
-  border-color: #38505a;
-  color: var(--accent-soft);
+  border-color: var(--focus-ring);
+  color: var(--accent);
 }
 
 .form {
@@ -138,8 +138,8 @@
   flex-direction: column;
   gap: 10px;
   padding: 14px 15px;
-  background: var(--bg-column);
-  border: 1px solid #263038;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
   border-radius: 10px;
 }
 
