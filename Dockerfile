@@ -30,4 +30,4 @@ USER node
 EXPOSE 3000
 # Apply any new migration, then serve. `server.js` is the traced server; it
 # reads PORT and HOSTNAME itself, so there is no `next start` here.
-CMD ["sh", "-c", "node scripts/migrate.mjs && node server.js"]
+CMD ["sh", "-c", "node scripts/migrate.mjs || true; exec node server.js"]

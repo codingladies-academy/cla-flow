@@ -1,1 +1,1 @@
-ALTER TABLE "users" ADD COLUMN "photo_url" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "photo_url" text;
