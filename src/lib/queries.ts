@@ -1,6 +1,6 @@
 import "server-only";
 import { byPos } from "@/lib/order";
-import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   activity,
@@ -14,6 +14,8 @@ import {
   tasks,
   users,
   views,
+  workspaceMembers,
+  workspaces,
 } from "@/db/schema";
 import { HttpError } from "./auth";
 import { readCardView } from "./card-view";
@@ -62,16 +64,252 @@ export async function withProjectLock<T>(
 }
 
 /* ------------------------------------------------------------------ */
+/* Workspaces                                                          */
+/* ------------------------------------------------------------------ */
+
+let _schemaEnsured = false;
+export async function ensureWorkspacesTables() {
+  if (_schemaEnsured) return;
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "workspaces" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        "name" text NOT NULL,
+        "slug" text NOT NULL,
+        "owner_id" uuid NOT NULL,
+        "icon_url" text,
+        "created_at" timestamp with time zone DEFAULT now() NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS "workspace_members" (
+        "workspace_id" uuid NOT NULL,
+        "user_id" uuid NOT NULL,
+        "role" text DEFAULT 'member' NOT NULL,
+        "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+        CONSTRAINT "workspace_members_workspace_id_user_id_pk" PRIMARY KEY("workspace_id","user_id")
+      );
+
+      ALTER TABLE "projects" ADD COLUMN IF NOT EXISTS "workspace_id" uuid;
+      ALTER TABLE "projects" ADD COLUMN IF NOT EXISTS "is_private" boolean DEFAULT false NOT NULL;
+
+      CREATE UNIQUE INDEX IF NOT EXISTS "workspaces_slug_idx" ON "workspaces" ("slug");
+      CREATE INDEX IF NOT EXISTS "workspace_members_user_idx" ON "workspace_members" ("user_id");
+    `);
+    _schemaEnsured = true;
+  } catch (err) {
+    console.error("ensureWorkspacesTables notice:", err);
+  }
+}
+
+export async function ensureDefaultWorkspace(userId: string) {
+  await ensureWorkspacesTables();
+  return db.transaction(async (tx) => {
+    let [ws] = await tx.select().from(workspaces).limit(1);
+    if (!ws) {
+      [ws] = await tx
+        .insert(workspaces)
+        .values({
+          name: "Coding Ladies Academy",
+          slug: "cla",
+          ownerId: userId,
+        })
+        .returning();
+
+      // Backfill any existing projects without a workspace
+      await tx.execute(sql`UPDATE "projects" SET "workspace_id" = ${ws.id} WHERE "workspace_id" IS NULL`);
+    }
+    await tx
+      .insert(workspaceMembers)
+      .values({
+        workspaceId: ws.id,
+        userId,
+        role: ws.ownerId === userId ? "owner" : "member",
+      })
+      .onConflictDoNothing();
+    return ws;
+  });
+}
+
+export async function listWorkspaces(userId: string, isSuperAdmin = false) {
+  await ensureDefaultWorkspace(userId);
+  if (isSuperAdmin) {
+    return db
+      .select({
+        id: workspaces.id,
+        name: workspaces.name,
+        slug: workspaces.slug,
+        ownerId: workspaces.ownerId,
+        iconUrl: workspaces.iconUrl,
+        role: sql<string>`coalesce(${workspaceMembers.role}, 'owner')`,
+        createdAt: workspaces.createdAt,
+        projectCount: sql<number>`(select count(*)::int from ${projects} p where p.workspace_id = ${workspaces}.id)`,
+        memberCount: sql<number>`(select count(*)::int from ${workspaceMembers} wm where wm.workspace_id = ${workspaces}.id)`,
+      })
+      .from(workspaces)
+      .leftJoin(workspaceMembers, and(eq(workspaceMembers.workspaceId, workspaces.id), eq(workspaceMembers.userId, userId)))
+      .orderBy(asc(workspaces.createdAt));
+  }
+
+  return db
+    .select({
+      id: workspaces.id,
+      name: workspaces.name,
+      slug: workspaces.slug,
+      ownerId: workspaces.ownerId,
+      iconUrl: workspaces.iconUrl,
+      role: workspaceMembers.role,
+      createdAt: workspaces.createdAt,
+      projectCount: sql<number>`(select count(*)::int from ${projects} p where p.workspace_id = ${workspaces}.id)`,
+      memberCount: sql<number>`(select count(*)::int from ${workspaceMembers} wm where wm.workspace_id = ${workspaces}.id)`,
+    })
+    .from(workspaceMembers)
+    .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+    .where(eq(workspaceMembers.userId, userId))
+    .orderBy(asc(workspaces.createdAt));
+}
+
+export async function getWorkspace(workspaceId: string, userId: string) {
+  const rows = await db
+    .select({
+      id: workspaces.id,
+      name: workspaces.name,
+      slug: workspaces.slug,
+      ownerId: workspaces.ownerId,
+      iconUrl: workspaces.iconUrl,
+      role: workspaceMembers.role,
+      createdAt: workspaces.createdAt,
+    })
+    .from(workspaceMembers)
+    .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+    .where(and(eq(workspaces.id, workspaceId), eq(workspaceMembers.userId, userId)))
+    .limit(1);
+
+  return rows[0] ?? null;
+}
+
+export async function createWorkspace(userId: string, name: string, iconUrl?: string | null) {
+  const slug =
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 30) || "workspace";
+
+  const uniqueSlug = `${slug}-${Math.random().toString(36).slice(2, 6)}`;
+
+  return db.transaction(async (tx) => {
+    const [ws] = await tx
+      .insert(workspaces)
+      .values({
+        name: name.trim(),
+        slug: uniqueSlug,
+        ownerId: userId,
+        iconUrl: iconUrl ?? null,
+      })
+      .returning();
+
+    await tx.insert(workspaceMembers).values({
+      workspaceId: ws.id,
+      userId,
+      role: "owner",
+    });
+
+    return ws;
+  });
+}
+
+export async function updateWorkspace(
+  workspaceId: string,
+  userId: string,
+  data: { name?: string; iconUrl?: string | null },
+) {
+  const wsMember = await db
+    .select({ role: workspaceMembers.role })
+    .from(workspaceMembers)
+    .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)))
+    .limit(1);
+
+  if (!wsMember[0] || (wsMember[0].role !== "owner" && wsMember[0].role !== "admin")) {
+    throw new HttpError(403, "Only workspace owners or admins can edit workspace settings.");
+  }
+
+  const updates: { name?: string; iconUrl?: string | null } = {};
+  if (typeof data.name === "string" && data.name.trim()) {
+    updates.name = data.name.trim();
+  }
+  if (data.iconUrl !== undefined) {
+    updates.iconUrl = data.iconUrl && data.iconUrl.trim() ? data.iconUrl.trim() : null;
+  }
+
+  if (Object.keys(updates).length === 0) return null;
+
+  const [updated] = await db
+    .update(workspaces)
+    .set(updates)
+    .where(eq(workspaces.id, workspaceId))
+    .returning();
+
+  return updated;
+}
+
+export async function listWorkspaceMembers(workspaceId: string) {
+  return db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      photoUrl: users.photoUrl,
+      color: users.color,
+      role: workspaceMembers.role,
+      createdAt: workspaceMembers.createdAt,
+    })
+    .from(workspaceMembers)
+    .innerJoin(users, eq(users.id, workspaceMembers.userId))
+    .where(eq(workspaceMembers.workspaceId, workspaceId))
+    .orderBy(asc(workspaceMembers.createdAt));
+}
+
+/* ------------------------------------------------------------------ */
 /* Projects                                                            */
 /* ------------------------------------------------------------------ */
 
-export async function listProjects(userId: string) {
+export async function listProjects(userId: string, workspaceId?: string) {
+  if (workspaceId) {
+    return db
+      .select({
+        id: projects.id,
+        name: projects.name,
+        key: projects.key,
+        ownerId: projects.ownerId,
+        workspaceId: projects.workspaceId,
+        isPrivate: projects.isPrivate,
+        role: sql<string>`coalesce((select pm.role from ${projectMembers} pm where pm.project_id = ${projects}.id and pm.user_id = ${userId}), 'member')`,
+        createdAt: projects.createdAt,
+        taskCount: sql<number>`(select count(*)::int from ${tasks} t where t.project_id = ${projects}.id)`,
+        memberCount: sql<number>`(select count(*)::int from ${projectMembers} pm where pm.project_id = ${projects}.id)`,
+      })
+      .from(projects)
+      .where(
+        and(
+          eq(projects.workspaceId, workspaceId),
+          or(
+            eq(projects.isPrivate, false),
+            eq(projects.ownerId, userId),
+            sql`exists (select 1 from ${projectMembers} pm where pm.project_id = ${projects}.id and pm.user_id = ${userId})`,
+          ),
+        ),
+      )
+      .orderBy(asc(projects.createdAt));
+  }
+
   return db
     .select({
       id: projects.id,
       name: projects.name,
       key: projects.key,
       ownerId: projects.ownerId,
+      workspaceId: projects.workspaceId,
+      isPrivate: projects.isPrivate,
       role: projectMembers.role,
       createdAt: projects.createdAt,
       taskCount: sql<number>`(select count(*)::int from ${tasks} t where t.project_id = ${projects}.id)`,
@@ -84,11 +322,29 @@ export async function listProjects(userId: string) {
 }
 
 /** Creates the project, its default property set and its default views. */
-export async function createProject(userId: string, name: string, key: string) {
+export async function createProject(
+  userId: string,
+  name: string,
+  key: string,
+  workspaceId?: string,
+  isPrivate: boolean = false,
+) {
+  let targetWsId = workspaceId;
+  if (!targetWsId) {
+    const ws = await ensureDefaultWorkspace(userId);
+    targetWsId = ws.id;
+  }
+
   return db.transaction(async (tx) => {
     const [project] = await tx
       .insert(projects)
-      .values({ name, key: key.toUpperCase(), ownerId: userId })
+      .values({
+        name,
+        key: key.toUpperCase(),
+        ownerId: userId,
+        workspaceId: targetWsId,
+        isPrivate,
+      })
       .returning();
 
     await tx.insert(projectMembers).values({
@@ -97,17 +353,18 @@ export async function createProject(userId: string, name: string, key: string) {
       role: "owner",
     });
 
-    // In internal org use, add all other staff members as project members
-    const otherStaff = await tx
-      .select({ id: users.id })
-      .from(users)
-      .where(and(eq(users.kind, "human"), ne(users.id, userId)));
+    if (!isPrivate && targetWsId) {
+      const otherMembers = await tx
+        .select({ id: workspaceMembers.userId })
+        .from(workspaceMembers)
+        .where(and(eq(workspaceMembers.workspaceId, targetWsId), ne(workspaceMembers.userId, userId)));
 
-    if (otherStaff.length) {
-      await tx
-        .insert(projectMembers)
-        .values(otherStaff.map((u) => ({ projectId: project.id, userId: u.id, role: "member" })))
-        .onConflictDoNothing();
+      if (otherMembers.length) {
+        await tx
+          .insert(projectMembers)
+          .values(otherMembers.map((u) => ({ projectId: project.id, userId: u.id, role: "member" })))
+          .onConflictDoNothing();
+      }
     }
 
     const propRanks = rankSequence(DEFAULT_PROPERTIES.length);
@@ -369,6 +626,8 @@ export async function loadBoard(projectId: string, role: string): Promise<BoardD
       key: projectRow.key,
       ownerId: projectRow.ownerId,
       role,
+      workspaceId: projectRow.workspaceId ?? null,
+      isPrivate: projectRow.isPrivate ?? false,
     },
     members,
     properties: propertyList,

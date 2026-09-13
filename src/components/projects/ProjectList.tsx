@@ -8,7 +8,8 @@ import { suggestProjectKey } from "@/lib/defaults";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Form";
 import { Tag } from "@/components/ui/Layout";
-import { UserMenu, type SessionUser } from "@/components/ui/UserMenu";
+import { type SessionUser } from "@/components/ui/UserMenu";
+import { LockIcon, SettingsIcon } from "@/components/ui/Icons";
 import styles from "./ProjectList.module.css";
 
 export type ProjectRow = {
@@ -18,6 +19,7 @@ export type ProjectRow = {
   role: string;
   taskCount: number;
   memberCount: number;
+  isPrivate?: boolean;
 };
 
 export function ProjectList({ user, projects }: { user: SessionUser; projects: ProjectRow[] }) {
@@ -26,6 +28,7 @@ export function ProjectList({ user, projects }: { user: SessionUser; projects: P
   const [adding, setAdding] = useState(first);
   const [name, setName] = useState("");
   const [key, setKey] = useState("");
+  const [isPrivate, setIsPrivate] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -38,6 +41,7 @@ export function ProjectList({ user, projects }: { user: SessionUser; projects: P
       const { project } = await api.post<{ project: { id: string } }>("/api/projects", {
         name: name.trim(),
         key: key.trim() || suggestProjectKey(name),
+        isPrivate,
       });
       router.push(`/p/${project.id}`);
     } catch (err) {
@@ -48,24 +52,11 @@ export function ProjectList({ user, projects }: { user: SessionUser; projects: P
 
   return (
     <div className={styles.page}>
-      <div className={styles.bar}>
-        <img src="https://codingladies.org/favicon.ico" alt="CLA Flow" className={styles.mark} style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'contain' }} />
-        <div className={styles.brand}>CLA Flow</div>
-        <div className={styles.spacer} />
-        <UserMenu user={user} />
-      </div>
-
       <div className={styles.body}>
         <div className={styles.heading}>
           <h1 className={styles.title}>Projects</h1>
         </div>
 
-        {/*
-         * This sentence used to be written and unreachable: `adding` starts
-         * true when there are no projects, and the copy only rendered when it
-         * was false. It now sits above the form, where it answers the question
-         * the form asks.
-         */}
         {first && (
           <p className={styles.empty}>
             A project is one board. It arrives with a full set of properties — Status, Priority,
@@ -79,7 +70,16 @@ export function ProjectList({ user, projects }: { user: SessionUser; projects: P
               <Link href={`/p/${project.id}`} className={styles.card}>
                 <div className={styles.cardTop}>
                   <span className={styles.key}>{project.key}</span>
-                  {project.role === "owner" && <Tag>owner</Tag>}
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                    {project.isPrivate && (
+                      <Tag>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                          <LockIcon size={11} /> private
+                        </span>
+                      </Tag>
+                    )}
+                    {project.role === "owner" && <Tag>owner</Tag>}
+                  </div>
                 </div>
                 <div className={styles.cardName}>{project.name}</div>
                 <div className={styles.cardMeta}>
@@ -88,12 +88,12 @@ export function ProjectList({ user, projects }: { user: SessionUser; projects: P
                 </div>
               </Link>
               <Link
-                href={`/p/${project.id}/settings/properties`}
+                href={`/p/${project.id}/settings/project`}
                 className={styles.cardGear}
                 aria-label={`Settings for ${project.name}`}
                 title="Project settings"
               >
-                ⚙
+                <SettingsIcon size={14} />
               </Link>
             </div>
           ))}
@@ -109,8 +109,6 @@ export function ProjectList({ user, projects }: { user: SessionUser; projects: P
                 placeholder="Project name"
                 onChange={(e) => setName(e.target.value)}
                 onBlur={() => {
-                  // A suggestion you can edit beats one that flickers in grey
-                  // as you type and looks disabled.
                   if (!key && name.trim()) setKey(suggestProjectKey(name));
                 }}
               />
@@ -124,6 +122,18 @@ export function ProjectList({ user, projects }: { user: SessionUser; projects: P
                 onChange={(e) => setKey(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
               />
               <span className={styles.hint}>Task keys look like {key || "USH"}-14.</span>
+
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", cursor: "pointer", marginTop: "4px" }}>
+                <input
+                  type="checkbox"
+                  checked={isPrivate}
+                  onChange={(e) => setIsPrivate(e.target.checked)}
+                />
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <LockIcon size={13} /> Make private (only invited members can view)
+                </span>
+              </label>
+
               {error && (
                 <div className={styles.error} role="alert">
                   {error}

@@ -32,7 +32,23 @@ try {
   await migrate(drizzle(pool), { migrationsFolder: "./drizzle" });
   console.log("migrations applied successfully");
 } catch (error) {
-  console.error("migration warning/failed:", error instanceof Error ? error.message : error);
+  console.error("drizzle migrator notice:", error instanceof Error ? error.message : error);
+  // Apply latest migrations directly if baseline table already exists
+  try {
+    const fs = await import("fs");
+    const path = await import("path");
+    const files = ["0005_chief_deadpool.sql", "0006_workspaces.sql"];
+    for (const f of files) {
+      const p = path.resolve("./drizzle", f);
+      if (fs.existsSync(p)) {
+        const sqlText = fs.readFileSync(p, "utf8");
+        await pool.query(sqlText);
+        console.log(`Direct migration applied: ${f}`);
+      }
+    }
+  } catch (directErr) {
+    console.error("direct migration error:", directErr instanceof Error ? directErr.message : directErr);
+  }
 } finally {
   try {
     await pool.end();

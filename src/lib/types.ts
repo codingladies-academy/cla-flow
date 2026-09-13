@@ -425,6 +425,8 @@ export type ProjectDTO = {
   key: string;
   ownerId: string;
   role: string;
+  workspaceId?: string | null;
+  isPrivate?: boolean;
 };
 
 export type BoardData = {

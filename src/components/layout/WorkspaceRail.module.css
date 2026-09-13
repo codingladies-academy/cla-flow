@@ -1,0 +1,160 @@
+.rail {
+  width: 68px;
+  min-width: 68px;
+  background: var(--bg-rail, #121316);
+  border-right: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.07));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0 16px;
+  user-select: none;
+  z-index: 30;
+  height: 100vh;
+  box-sizing: border-box;
+}
+
+.workspaceList {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+}
+
+.workspaceList::-webkit-scrollbar {
+  display: none;
+}
+
+.itemWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.activeIndicator {
+  position: absolute;
+  left: 0;
+  width: 4px;
+  height: 0;
+  background: var(--accent-primary, #60a5fa);
+  border-radius: 0 4px 4px 0;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.itemWrap:hover .activeIndicator {
+  height: 16px;
+}
+
+.activeIndicatorOn {
+  height: 36px !important;
+}
+
+.wsButton {
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  background: var(--bg-panel, #22242a);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary, #fff);
+  cursor: pointer;
+  overflow: hidden;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.wsButton:hover {
+  border-radius: 12px;
+  background: var(--accent-primary, #3b82f6);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.wsButtonActive {
+  border-radius: 12px;
+  background: var(--accent-primary, #3b82f6);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+}
+
+.wsIcon {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.wsInitials {
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+
+.addWorkspaceBtn {
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  background: transparent;
+  border: 1.5px dashed var(--border-subtle, rgba(255, 255, 255, 0.2));
+  color: var(--text-muted, #999);
+  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+  line-height: 1;
+}
+
+.addWorkspaceBtn:hover {
+  border-radius: 12px;
+  border-color: var(--accent-primary, #3b82f6);
+  color: var(--accent-primary, #3b82f6);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.bottomSection {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+}
+
+.toolBtn {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--bg-hover, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.15s;
+}
+
+.toolBtn:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.12));
+  transform: scale(1.05);
+}
+
+.userWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}

@@ -43,6 +43,13 @@
       "when": 1789313762420,
       "tag": "0005_chief_deadpool",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789324000000,
+      "tag": "0006_workspaces",
+      "breakpoints": true
     }
   ]
 }

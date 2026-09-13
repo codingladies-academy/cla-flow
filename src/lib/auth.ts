@@ -4,7 +4,7 @@ import { promisify } from "node:util";
 import { cookies, headers } from "next/headers";
 import { and, eq, gt } from "drizzle-orm";
 import { db } from "@/db";
-import { projectMembers, projects, sessions, users } from "@/db/schema";
+import { projectMembers, projects, sessions, users, workspaceMembers, workspaces } from "@/db/schema";
 import { bearerToken, holderOfToken } from "./agents";
 
 const scrypt = promisify(scryptCb) as (
@@ -167,7 +167,7 @@ export type Membership = {
   role: string;
 };
 
-/** Throws unless the user is a member of the project. */
+/** Throws unless the user is a member of the project or has access through the workspace. */
 export async function requireMembership(userId: string, projectId: string): Promise<Membership> {
   const rows = await db
     .select({
@@ -182,7 +182,161 @@ export async function requireMembership(userId: string, projectId: string): Prom
     .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)))
     .limit(1);
 
+  if (rows[0]) return rows[0];
+
+  // If not explicitly in project_members, check if project is public to the workspace
+  const projRows = await db
+    .select({
+      projectId: projects.id,
+      projectName: projects.name,
+      projectKey: projects.key,
+      ownerId: projects.ownerId,
+      workspaceId: projects.workspaceId,
+      isPrivate: projects.isPrivate,
+    })
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .limit(1);
+
+  const proj = projRows[0];
+  if (!proj) throw new HttpError(404, "Project not found.");
+
+  // Super Admins have administrative owner access to all projects
+  const [userRow] = await db
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  const isSuper = userRow && isAdmin({ email: userRow.email } as any);
+
+  // Workspace owners have administrative owner access to projects in their workspace
+  let isWsOwner = false;
+  if (proj.workspaceId) {
+    const [ws] = await db
+      .select({ ownerId: workspaces.ownerId })
+      .from(workspaces)
+      .where(eq(workspaces.id, proj.workspaceId))
+      .limit(1);
+    if (ws && ws.ownerId === userId) isWsOwner = true;
+    if (!isWsOwner) {
+      const [wm] = await db
+        .select({ role: workspaceMembers.role })
+        .from(workspaceMembers)
+        .where(and(eq(workspaceMembers.workspaceId, proj.workspaceId), eq(workspaceMembers.userId, userId)))
+        .limit(1);
+      if (wm && wm.role === "owner") isWsOwner = true;
+    }
+  }
+
+  if (isSuper || isWsOwner) {
+    await db
+      .insert(projectMembers)
+      .values({
+        projectId: proj.projectId,
+        userId,
+        role: "owner",
+      })
+      .onConflictDoNothing();
+
+    return {
+      projectId: proj.projectId,
+      projectName: proj.projectName,
+      projectKey: proj.projectKey,
+      ownerId: proj.ownerId,
+      role: "owner",
+    };
+  }
+
+  if (!proj.isPrivate && proj.workspaceId) {
+    const wsMember = await db
+      .select({ role: workspaceMembers.role })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.workspaceId, proj.workspaceId), eq(workspaceMembers.userId, userId)))
+      .limit(1);
+
+    if (wsMember[0]) {
+      await db
+        .insert(projectMembers)
+        .values({
+          projectId: proj.projectId,
+          userId,
+          role: wsMember[0].role === "owner" ? "owner" : "member",
+        })
+        .onConflictDoNothing();
+
+      return {
+        projectId: proj.projectId,
+        projectName: proj.projectName,
+        projectKey: proj.projectKey,
+        ownerId: proj.ownerId,
+        role: wsMember[0].role === "owner" ? "owner" : "member",
+      };
+    }
+  }
+
+  throw new HttpError(404, "Project not found.");
+}
+
+export async function requireWorkspaceMembership(
+  userId: string,
+  workspaceId: string,
+): Promise<{ workspaceId: string; role: string }> {
+  const rows = await db
+    .select({
+      workspaceId: workspaceMembers.workspaceId,
+      role: workspaceMembers.role,
+    })
+    .from(workspaceMembers)
+    .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)))
+    .limit(1);
+
   const row = rows[0];
-  if (!row) throw new HttpError(404, "Project not found.");
+  if (!row) throw new HttpError(404, "Workspace not found.");
   return row;
 }
+
+export async function canCreateWorkspace(user: CurrentUser | null): Promise<boolean> {
+  if (!user) return false;
+  if (isAdmin(user)) return true;
+  const owned = await db
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(eq(workspaces.ownerId, user.id))
+    .limit(1);
+  return owned.length > 0;
+}
+
+export async function isSuperUser(userId: string): Promise<boolean> {
+  const [userRow] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
+  return !!userRow && isAdmin({ email: userRow.email } as any);
+}
+
+/** Workspace owners and Super Admins can move projects between workspaces. */
+export async function canMoveProject(userId: string, projectId: string): Promise<boolean> {
+  if (await isSuperUser(userId)) return true;
+
+  const [proj] = await db
+    .select({ workspaceId: projects.workspaceId })
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .limit(1);
+
+  if (!proj || !proj.workspaceId) return false;
+
+  const [ws] = await db
+    .select({ ownerId: workspaces.ownerId })
+    .from(workspaces)
+    .where(eq(workspaces.id, proj.workspaceId))
+    .limit(1);
+
+  if (ws && ws.ownerId === userId) return true;
+
+  const [wm] = await db
+    .select({ role: workspaceMembers.role })
+    .from(workspaceMembers)
+    .where(and(eq(workspaceMembers.workspaceId, proj.workspaceId), eq(workspaceMembers.userId, userId)))
+    .limit(1);
+
+  return wm?.role === "owner";
+}
+

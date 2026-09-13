@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import { getCurrentUser, requireMembership, HttpError } from "@/lib/auth";
-import { loadBoard } from "@/lib/queries";
+import { canCreateWorkspace, getCurrentUser, requireMembership, HttpError, isAdmin } from "@/lib/auth";
+import { listProjects, listWorkspaces, loadBoard } from "@/lib/queries";
 import { BoardApp } from "@/components/board/BoardApp";
+import { AppShell } from "@/components/layout/AppShell";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,35 @@ export default async function BoardPage({
     throw err;
   }
 
-  const board = await loadBoard(projectId, role);
-  return <BoardApp initial={board} user={user} initialTask={task ?? null} />;
+  const isSuper = isAdmin(user);
+  const [board, workspaces, canCreate] = await Promise.all([
+    loadBoard(projectId, role),
+    listWorkspaces(user.id, isSuper),
+    canCreateWorkspace(user),
+  ]);
+
+  const projectWs =
+    workspaces.find(
+      (w) => w.id === (board.project as { workspaceId?: string }).workspaceId,
+    ) ?? workspaces[0];
+
+  const wsProjects = await listProjects(user.id, projectWs?.id);
+
+  return (
+    <AppShell
+      user={user}
+      initialWorkspaces={workspaces}
+      canCreateWorkspace={canCreate}
+      initialActiveWorkspaceId={projectWs?.id}
+      initialProjects={wsProjects.map((p) => ({
+        id: p.id,
+        name: p.name,
+        key: p.key,
+        isPrivate: Boolean(p.isPrivate),
+        taskCount: p.taskCount,
+      }))}
+    >
+      <BoardApp initial={board} user={user} initialTask={task ?? null} />
+    </AppShell>
+  );
 }

@@ -31,6 +31,23 @@
   white-space: nowrap;
 }
 
+.buttonCompact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.15s;
+}
+
+.buttonCompact:hover {
+  transform: scale(1.05);
+  opacity: 0.9;
+}
+
 .caret {
   font-size: 9px;
   line-height: 1;
@@ -52,6 +69,14 @@
   flex-direction: column;
   gap: 1px;
   animation: ushabti-fade-in 120ms var(--ease);
+}
+
+.menuTopRight {
+  top: auto !important;
+  right: auto !important;
+  bottom: 0 !important;
+  left: calc(100% + 14px) !important;
+  z-index: 100 !important;
 }
 
 .email {

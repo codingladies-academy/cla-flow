@@ -47,17 +47,58 @@ export const sessions = pgTable(
 );
 
 /* ------------------------------------------------------------------ */
+/* Workspaces                                                          */
+/* ------------------------------------------------------------------ */
+
+export const workspaces = pgTable(
+  "workspaces",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    iconUrl: text("icon_url"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("workspaces_slug_idx").on(t.slug)],
+);
+
+export const workspaceMembers = pgTable(
+  "workspace_members",
+  {
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** "owner" | "admin" | "member" */
+    role: text("role").notNull().default("member"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.userId] }),
+    index("workspace_members_user_idx").on(t.userId),
+  ],
+);
+
+/* ------------------------------------------------------------------ */
 /* Projects and membership                                             */
 /* ------------------------------------------------------------------ */
 
 export const projects = pgTable("projects", {
   id: uuid("id").primaryKey().defaultRandom(),
+  workspaceId: uuid("workspace_id").references(() => workspaces.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   /** Short prefix for task keys, e.g. "USH" gives USH-14. */
   key: text("key").notNull(),
   ownerId: uuid("owner_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
+  /** When false (default), visible to all workspace members. When true, restricted to project_members. */
+  isPrivate: boolean("is_private").notNull().default(false),
   /** Monotonic counter that produces the number part of a task key. */
   taskCounter: integer("task_counter").notNull().default(0),
   /**
