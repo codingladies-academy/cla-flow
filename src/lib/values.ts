@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { projectMembers, properties, propertyOptions, taskValues, users } from "@/db/schema";
+import { projectMembers, projects, properties, propertyOptions, taskValues, users, workspaceMembers } from "@/db/schema";
 import { HttpError } from "./auth";
 import type { PropertyType, TaskValue } from "./types";
 
@@ -53,6 +53,15 @@ export async function coerceValue(prop: PropertyRow, raw: unknown): Promise<Task
         : [];
       if (!ids.length) return null;
       const uniqueIds = Array.from(new Set(ids));
+
+      const validUsers = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(inArray(users.id, uniqueIds));
+      if (validUsers.length !== uniqueIds.length) {
+        throw new HttpError(400, "One of the selected people does not exist.");
+      }
+
       const rows = await db
         .select({ userId: projectMembers.userId })
         .from(projectMembers)
@@ -62,9 +71,42 @@ export async function coerceValue(prop: PropertyRow, raw: unknown): Promise<Task
             inArray(projectMembers.userId, uniqueIds),
           ),
         );
-      if (rows.length !== uniqueIds.length) {
-        throw new HttpError(400, "One of the selected people is not a member of this project.");
+
+      const existingProjectMemberIds = new Set(rows.map((r) => r.userId));
+      const missingProjectMemberIds = uniqueIds.filter((id) => !existingProjectMemberIds.has(id));
+
+      if (missingProjectMemberIds.length > 0) {
+        await db
+          .insert(projectMembers)
+          .values(
+            missingProjectMemberIds.map((userId) => ({
+              projectId: prop.projectId,
+              userId,
+              role: "member",
+            })),
+          )
+          .onConflictDoNothing();
       }
+
+      const [proj] = await db
+        .select({ workspaceId: projects.workspaceId })
+        .from(projects)
+        .where(eq(projects.id, prop.projectId))
+        .limit(1);
+
+      if (proj?.workspaceId) {
+        await db
+          .insert(workspaceMembers)
+          .values(
+            uniqueIds.map((userId) => ({
+              workspaceId: proj.workspaceId as string,
+              userId,
+              role: "member",
+            })),
+          )
+          .onConflictDoNothing();
+      }
+
       return Array.isArray(raw) ? uniqueIds : uniqueIds[0];
     }
     case "number": {

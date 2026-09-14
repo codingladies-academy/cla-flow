@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { projectMembers, users } from "@/db/schema";
+import { projectMembers, projects, users, workspaceMembers } from "@/db/schema";
 import { HttpError } from "@/lib/auth";
 import { body, broadcast, clientIdOf, guard, json, ownerOnly, route, str } from "@/lib/api";
 import { notifyAddedToProject } from "@/lib/notifications";
@@ -26,6 +26,20 @@ export const POST = route<Ctx>(async (req, ctx) => {
   if (existing.length) throw new HttpError(409, "That person is already a member.");
 
   await db.insert(projectMembers).values({ projectId, userId: user.id, role: "member" });
+
+  // Also ensure they are a member of the workspace containing this project
+  const [proj] = await db.select({ workspaceId: projects.workspaceId }).from(projects).where(eq(projects.id, projectId)).limit(1);
+  if (proj?.workspaceId) {
+    await db
+      .insert(workspaceMembers)
+      .values({
+        workspaceId: proj.workspaceId,
+        userId: user.id,
+        role: "member",
+      })
+      .onConflictDoNothing();
+  }
+
   await broadcast({ projectId, scope: "project", clientId: clientIdOf(req) });
   void notifyAddedToProject({ projectId, userId: user.id, actorId: actor.id });
   return json(

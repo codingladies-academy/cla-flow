@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { projects, workspaceMembers, workspaces } from "@/db/schema";
+import { projectMembers, projects, workspaceMembers, workspaces } from "@/db/schema";
 import { canMoveProject, HttpError, isAdmin, isSuperUser } from "@/lib/auth";
 import { body, broadcast, clientIdOf, guard, json, ownerOnly, route, str } from "@/lib/api";
 
@@ -57,6 +57,39 @@ export const PATCH = route<Ctx>(async (req, ctx) => {
   if (Object.keys(patch).length === 0) return json({ ok: true });
 
   await db.update(projects).set(patch).where(eq(projects.id, projectId));
+
+  // If project was made workspace-wide, sync existing workspace members into projectMembers
+  if (patch.isPrivate === false) {
+    const [proj] = await db.select({ workspaceId: projects.workspaceId }).from(projects).where(eq(projects.id, projectId)).limit(1);
+    if (proj?.workspaceId) {
+      const wsM = await db
+        .select({ userId: workspaceMembers.userId })
+        .from(workspaceMembers)
+        .where(eq(workspaceMembers.workspaceId, proj.workspaceId));
+      if (wsM.length) {
+        await db
+          .insert(projectMembers)
+          .values(wsM.map((m) => ({ projectId, userId: m.userId, role: "member" })))
+          .onConflictDoNothing();
+      }
+    }
+  }
+
+  // If project was moved to another workspace, ensure all project members are added to target workspaceMembers
+  if (patch.workspaceId) {
+    const targetWsId = patch.workspaceId as string;
+    const pMembers = await db
+      .select({ userId: projectMembers.userId })
+      .from(projectMembers)
+      .where(eq(projectMembers.projectId, projectId));
+    if (pMembers.length) {
+      await db
+        .insert(workspaceMembers)
+        .values(pMembers.map((m) => ({ workspaceId: targetWsId, userId: m.userId, role: "member" })))
+        .onConflictDoNothing();
+    }
+  }
+
   await broadcast({ projectId, scope: "project", clientId: clientIdOf(req) });
   return json({ ok: true });
 });

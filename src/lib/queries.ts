@@ -132,6 +132,28 @@ export async function ensureDefaultWorkspace(userId: string) {
 
 export async function listWorkspaces(userId: string, isSuperAdmin = false) {
   await ensureDefaultWorkspace(userId);
+
+  // Ensure user is automatically linked to any workspace containing projects they are a member or owner of
+  try {
+    await db.execute(sql`
+      INSERT INTO ${workspaceMembers} ("workspace_id", "user_id", "role")
+      SELECT DISTINCT p.workspace_id, pm.user_id, 'member'
+      FROM ${projectMembers} pm
+      JOIN ${projects} p ON p.id = pm.project_id
+      WHERE pm.user_id = ${userId} AND p.workspace_id IS NOT NULL
+      ON CONFLICT DO NOTHING
+    `);
+    await db.execute(sql`
+      INSERT INTO ${workspaceMembers} ("workspace_id", "user_id", "role")
+      SELECT w.id, w.owner_id, 'owner'
+      FROM ${workspaces} w
+      WHERE w.owner_id = ${userId}
+      ON CONFLICT DO NOTHING
+    `);
+  } catch (err) {
+    console.error("Auto-sync workspace membership notice:", err);
+  }
+
   if (isSuperAdmin) {
     return db
       .select({

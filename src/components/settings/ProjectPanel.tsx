@@ -7,6 +7,7 @@ import { useBoard } from "@/components/board/store";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select } from "@/components/ui/Form";
 import { Card, Note, Row, Spacer, Tag } from "@/components/ui/Layout";
+import { GlobeIcon, LockIcon } from "@/components/ui/Icons";
 import { PageHead } from "./SettingsShell";
 import styles from "./settings.module.css";
 
@@ -26,6 +27,8 @@ export function ProjectPanel() {
 
   const [name, setName] = useState(data.project.name);
   const [key, setKey] = useState(data.project.key);
+  const [isPrivate, setIsPrivate] = useState<boolean>(Boolean(data.project.isPrivate));
+  const [savingPrivacy, setSavingPrivacy] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [confirming, setConfirming] = useState(false);
 
@@ -39,6 +42,10 @@ export function ProjectPanel() {
 
   const taskCount = data.tasks.length;
   const keyChanged = key !== data.project.key && key.length > 0;
+
+  useEffect(() => {
+    setIsPrivate(Boolean(data.project.isPrivate));
+  }, [data.project.isPrivate]);
 
   useEffect(() => {
     let active = true;
@@ -71,6 +78,22 @@ export function ProjectPanel() {
     (currentWs && currentWs.ownerId === user.id);
   const candidateWorkspaces = workspaces.filter((w) => w.id !== data.project.workspaceId);
   const targetWs = workspaces.find((w) => w.id === targetWsId);
+
+  async function handlePrivacyChange(nextIsPrivate: boolean) {
+    if (!isOwner || savingPrivacy || nextIsPrivate === isPrivate) return;
+    setSavingPrivacy(true);
+    try {
+      await api.patch(`/api/projects/${data.project.id}`, { isPrivate: nextIsPrivate });
+      setIsPrivate(nextIsPrivate);
+      notify(`Project is now ${nextIsPrivate ? "Private" : "Workspace-wide"}.`);
+      await refresh();
+      router.refresh();
+    } catch (err) {
+      notify(err instanceof Error ? err.message : "Could not update project privacy.");
+    } finally {
+      setSavingPrivacy(false);
+    }
+  }
 
   async function handleMoveProject() {
     if (!targetWsId || moving) return;
@@ -164,6 +187,86 @@ export function ProjectPanel() {
         {!isOwner && (
           <Row>
             <Note>Only the owner can change the name and the key.</Note>
+          </Row>
+        )}
+      </Card>
+
+      <div style={{ marginTop: 28 }}>
+        <PageHead
+          title="Privacy"
+          note="Control who in this workspace can view and collaborate on this project."
+        />
+      </div>
+
+      <Card>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "4px 0" }}>
+          <div
+            onClick={() => void handlePrivacyChange(false)}
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 12,
+              padding: "12px 14px",
+              borderRadius: 8,
+              border: `1px solid ${!isPrivate ? "var(--accent, #00BFB3)" : "var(--border-subtle, rgba(255,255,255,0.08))"}`,
+              background: !isPrivate ? "var(--accent-glow, rgba(0, 191, 179, 0.08))" : "var(--bg-subtle, rgba(255,255,255,0.02))",
+              cursor: isOwner && !savingPrivacy ? "pointer" : "default",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <input
+              type="radio"
+              name="project_privacy"
+              checked={!isPrivate}
+              disabled={!isOwner || savingPrivacy}
+              onChange={() => void handlePrivacyChange(false)}
+              style={{ marginTop: 3, cursor: isOwner ? "pointer" : "default" }}
+            />
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 600, fontSize: "0.9rem", color: "var(--text-primary, #fff)" }}>
+                <GlobeIcon size={14} /> Workspace-wide Project
+              </div>
+              <div style={{ fontSize: "0.8rem", color: "var(--text-muted, #888)", lineHeight: 1.4 }}>
+                All members of this workspace can view and collaborate on this project.
+              </div>
+            </div>
+          </div>
+
+          <div
+            onClick={() => void handlePrivacyChange(true)}
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 12,
+              padding: "12px 14px",
+              borderRadius: 8,
+              border: `1px solid ${isPrivate ? "var(--accent, #00BFB3)" : "var(--border-subtle, rgba(255,255,255,0.08))"}`,
+              background: isPrivate ? "var(--accent-glow, rgba(0, 191, 179, 0.08))" : "var(--bg-subtle, rgba(255,255,255,0.02))",
+              cursor: isOwner && !savingPrivacy ? "pointer" : "default",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <input
+              type="radio"
+              name="project_privacy"
+              checked={isPrivate}
+              disabled={!isOwner || savingPrivacy}
+              onChange={() => void handlePrivacyChange(true)}
+              style={{ marginTop: 3, cursor: isOwner ? "pointer" : "default" }}
+            />
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 600, fontSize: "0.9rem", color: "var(--text-primary, #fff)" }}>
+                <LockIcon size={14} /> Private Project
+              </div>
+              <div style={{ fontSize: "0.8rem", color: "var(--text-muted, #888)", lineHeight: 1.4 }}>
+                Only specifically invited members can view this project.
+              </div>
+            </div>
+          </div>
+        </div>
+        {!isOwner && (
+          <Row>
+            <Note>Only the owner can change the privacy setting.</Note>
           </Row>
         )}
       </Card>

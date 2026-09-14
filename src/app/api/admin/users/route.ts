@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { projectMembers, projects, users } from "@/db/schema";
+import { projectMembers, projects, users, workspaceMembers, workspaces } from "@/db/schema";
 import { getCurrentUser, hashPassword, HttpError, isAdmin } from "@/lib/auth";
 import { body, json, route, str } from "@/lib/api";
 import { pickAvatarColor } from "@/lib/colors";
@@ -79,7 +79,15 @@ export const POST = route(async (req: Request) => {
     })
     .returning({ id: users.id, email: users.email, name: users.name, photoUrl: users.photoUrl });
 
-  // In internal org use, add new staff member to all existing projects
+  // In internal org use, add new staff member to all existing workspaces and projects
+  const allWorkspaces = await db.select({ id: workspaces.id }).from(workspaces);
+  if (allWorkspaces.length) {
+    await db
+      .insert(workspaceMembers)
+      .values(allWorkspaces.map((w) => ({ workspaceId: w.id, userId: user.id, role: "member" })))
+      .onConflictDoNothing();
+  }
+
   const allProjects = await db.select({ id: projects.id }).from(projects);
   if (allProjects.length) {
     await db

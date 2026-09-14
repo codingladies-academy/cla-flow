@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { api } from "@/lib/client";
 import { tint } from "@/lib/colors";
 import { formatDate } from "@/lib/board";
 import type { MemberDTO, PropertyDTO, TaskValue } from "@/lib/types";
@@ -272,7 +273,29 @@ function MultiSelect({ property, value, onChange, onAddOption }: Props) {
 
 function PersonMenu({ value, members, onChange }: Props) {
   const [open, setOpen] = useState(false);
-  const ref = useDismiss<HTMLDivElement>(() => setOpen(false), open);
+  const [search, setSearch] = useState("");
+  const [staffList, setStaffList] = useState<
+    { id: string; name: string; email: string; color: string; photoUrl: string | null }[]
+  >([]);
+
+  const ref = useDismiss<HTMLDivElement>(() => {
+    setOpen(false);
+    setSearch("");
+  }, open);
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    api
+      .get<{ staff: typeof staffList }>("/api/staff")
+      .then((res) => {
+        if (active) setStaffList(res.staff);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [open]);
 
   const selectedIds = Array.isArray(value)
     ? value.filter((v): v is string => typeof v === "string")
@@ -281,8 +304,8 @@ function PersonMenu({ value, members, onChange }: Props) {
     : [];
 
   const selectedMembers = selectedIds
-    .map((id) => members.find((m) => m.id === id))
-    .filter((m): m is MemberDTO => !!m);
+    .map((id) => members.find((m) => m.id === id) || staffList.find((s) => s.id === id))
+    .filter((m): m is (MemberDTO | (typeof staffList)[0]) => !!m);
 
   function toggle(id: string) {
     if (selectedIds.includes(id)) {
@@ -297,7 +320,24 @@ function PersonMenu({ value, members, onChange }: Props) {
   function clear() {
     onChange(null);
     setOpen(false);
+    setSearch("");
   }
+
+  const query = search.trim().toLowerCase();
+  const filteredMembers = query
+    ? members.filter(
+        (m) =>
+          m.name.toLowerCase().includes(query) || (m.email && m.email.toLowerCase().includes(query)),
+      )
+    : members;
+
+  const otherStaff = staffList.filter(
+    (s) =>
+      !members.some((m) => m.id === s.id) &&
+      (!query ||
+        s.name.toLowerCase().includes(query) ||
+        (s.email && s.email.toLowerCase().includes(query))),
+  );
 
   return (
     <div className={styles.wrap} ref={ref}>
@@ -348,7 +388,14 @@ function PersonMenu({ value, members, onChange }: Props) {
         <span className={styles.caret}>▾</span>
       </button>
       {open && (
-        <div className={styles.menu} style={{ top: 32, minWidth: 200 }}>
+        <div className={styles.menu} style={{ top: 32, minWidth: 220, maxHeight: 320 }}>
+          <input
+            className={styles.menuInput}
+            autoFocus
+            value={search}
+            placeholder="Search people…"
+            onChange={(e) => setSearch(e.target.value)}
+          />
           <button className={styles.menuItem} onClick={clear}>
             <span
               style={{
@@ -368,7 +415,7 @@ function PersonMenu({ value, members, onChange }: Props) {
               ✓
             </span>
           </button>
-          {members.map((member) => {
+          {filteredMembers.map((member) => {
             const isSelected = selectedIds.includes(member.id);
             return (
               <button
@@ -382,7 +429,9 @@ function PersonMenu({ value, members, onChange }: Props) {
                   size={18}
                   photoUrl={member.photoUrl}
                 />
-                {member.name}
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {member.name}
+                </span>
                 <span style={{ flex: 1 }} />
                 <span
                   className={styles.tick}
@@ -393,6 +442,64 @@ function PersonMenu({ value, members, onChange }: Props) {
               </button>
             );
           })}
+
+          {otherStaff.length > 0 && (
+            <>
+              <div
+                style={{
+                  fontSize: 10,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  color: "var(--faint, #666)",
+                  padding: "6px 8px 2px",
+                  fontWeight: 600,
+                  borderTop: "1px solid var(--line-dash, rgba(255,255,255,0.06))",
+                  marginTop: 4,
+                }}
+              >
+                Other Staff
+              </div>
+              {otherStaff.map((staff) => {
+                const isSelected = selectedIds.includes(staff.id);
+                return (
+                  <button
+                    key={staff.id}
+                    className={`${styles.menuItem} ${isSelected ? styles.menuItemOn : ""}`}
+                    onClick={() => toggle(staff.id)}
+                    title={`Assign ${staff.name}`}
+                  >
+                    <Avatar
+                      name={staff.name}
+                      color={staff.color}
+                      size={18}
+                      photoUrl={staff.photoUrl}
+                    />
+                    <div style={{ display: "flex", flexDirection: "column", overflow: "hidden", textAlign: "left" }}>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {staff.name}
+                      </span>
+                      <span style={{ fontSize: 10, color: "var(--faint, #777)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {staff.email}
+                      </span>
+                    </div>
+                    <span style={{ flex: 1 }} />
+                    <span
+                      className={styles.tick}
+                      style={{ color: isSelected ? "var(--accent)" : "transparent" }}
+                    >
+                      ✓
+                    </span>
+                  </button>
+                );
+              })}
+            </>
+          )}
+
+          {filteredMembers.length === 0 && otherStaff.length === 0 && query && (
+            <div style={{ padding: "8px 10px", fontSize: 12, color: "var(--faint, #777)", textAlign: "center" }}>
+              No people found
+            </div>
+          )}
         </div>
       )}
     </div>
