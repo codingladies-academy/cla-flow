@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { canCreateWorkspace, getCurrentUser, requireMembership, HttpError, isAdmin } from "@/lib/auth";
-import { listProjects, listWorkspaces, loadBoard } from "@/lib/queries";
+import { listMyTasks, listProjects, listWorkspaces, loadBoard } from "@/lib/queries";
 import { BoardApp } from "@/components/board/BoardApp";
 import { AppShell } from "@/components/layout/AppShell";
 
@@ -46,10 +46,11 @@ export default async function BoardPage({
   }
 
   const isSuper = isAdmin(user);
-  const [board, workspaces, canCreate] = await Promise.all([
+  const [board, workspaces, canCreate, myTasks] = await Promise.all([
     loadBoard(projectId, role),
     listWorkspaces(user.id, isSuper),
     canCreateWorkspace(user),
+    listMyTasks(user.id),
   ]);
 
   const projectWs =
@@ -65,6 +66,7 @@ export default async function BoardPage({
       initialWorkspaces={workspaces}
       canCreateWorkspace={canCreate}
       initialActiveWorkspaceId={projectWs?.id}
+      myTaskCount={myTasks.length}
       initialProjects={wsProjects.map((p) => ({
         id: p.id,
         name: p.name,

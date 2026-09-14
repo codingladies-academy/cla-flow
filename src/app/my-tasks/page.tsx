@@ -3,16 +3,16 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { canCreateWorkspace, getCurrentUser, isAdmin } from "@/lib/auth";
 import { listMyTasks, listProjects, listWorkspaces } from "@/lib/queries";
-import { ProjectList } from "@/components/projects/ProjectList";
 import { AppShell } from "@/components/layout/AppShell";
+import { MyTasksView } from "@/components/tasks/MyTasksView";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Projects · CLA Flow" };
+export const metadata: Metadata = { title: "My Tasks · CLA Flow" };
 
-export default async function ProjectsPage({
+export default async function MyTasksPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ tab?: string; workspaceId?: string }>;
+  searchParams?: Promise<{ workspaceId?: string }>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
@@ -31,7 +31,6 @@ export default async function ProjectsPage({
   const activeWs =
     (savedWsId ? workspaces.find((w) => w.id === savedWsId) : null) ?? workspaces[0];
   const rows = await listProjects(user.id, activeWs?.id);
-  const initialTab = params.tab === "tasks" ? "tasks" : "projects";
 
   return (
     <AppShell
@@ -50,20 +49,7 @@ export default async function ProjectsPage({
         taskCount: r.taskCount,
       }))}
     >
-      <ProjectList
-        user={user}
-        myTasks={myTasks}
-        initialTab={initialTab}
-        projects={rows.map((r) => ({
-          id: r.id,
-          name: r.name,
-          key: r.key,
-          role: r.role,
-          isPrivate: Boolean(r.isPrivate),
-          taskCount: r.taskCount,
-          memberCount: r.memberCount,
-        }))}
-      />
+      <MyTasksView tasks={myTasks} />
     </AppShell>
   );
 }

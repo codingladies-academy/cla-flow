@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { createContext, useContext, useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { api } from "@/lib/client";
 import type { SessionUser } from "@/components/ui/UserMenu";
 import { WorkspaceRail, type WorkspaceDTO } from "./WorkspaceRail";
@@ -12,12 +12,28 @@ import { NewProjectModal } from "@/components/workspaces/NewProjectModal";
 import { MenuIcon } from "@/components/ui/Icons";
 import styles from "./AppShell.module.css";
 
+export type WorkspaceContextType = {
+  activeWorkspace: WorkspaceDTO;
+  activeWorkspaceId: string;
+  projects: SidebarProject[];
+  selectWorkspace: (id: string) => void;
+  openNewProject: () => void;
+  openSettings: () => void;
+};
+
+export const WorkspaceContext = createContext<WorkspaceContextType | null>(null);
+
+export function useWorkspace() {
+  return useContext(WorkspaceContext);
+}
+
 export function AppShell({
   user,
   initialWorkspaces,
   canCreateWorkspace,
   initialActiveWorkspaceId,
   initialProjects = [],
+  myTaskCount = 0,
   children,
 }: {
   user: SessionUser;
@@ -25,9 +41,12 @@ export function AppShell({
   canCreateWorkspace: boolean;
   initialActiveWorkspaceId?: string;
   initialProjects?: SidebarProject[];
+  myTaskCount?: number;
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [workspaces, setWorkspaces] = useState<WorkspaceDTO[]>(initialWorkspaces);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>(() => {
     if (initialActiveWorkspaceId) return initialActiveWorkspaceId;
@@ -46,10 +65,33 @@ export function AppShell({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
 
-  // Sync active workspace to localStorage
+  // Sync state if server passes updated activeWorkspaceId or projects
   useEffect(() => {
-    if (activeWorkspaceId && typeof window !== "undefined") {
-      localStorage.setItem("cla_flow_active_ws", activeWorkspaceId);
+    if (initialActiveWorkspaceId && initialActiveWorkspaceId !== activeWorkspaceId) {
+      setActiveWorkspaceId(initialActiveWorkspaceId);
+    }
+  }, [initialActiveWorkspaceId]);
+
+  useEffect(() => {
+    if (initialProjects && initialProjects.length > 0) {
+      setProjects(initialProjects);
+    }
+  }, [initialProjects]);
+
+  // Auto-close mobile drawer on navigation
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  // Sync active workspace to localStorage and cookie
+  useEffect(() => {
+    if (activeWorkspaceId) {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("cla_flow_active_ws", activeWorkspaceId);
+      }
+      if (typeof document !== "undefined") {
+        document.cookie = `cla_flow_active_ws=${activeWorkspaceId}; path=/; max-age=31536000; SameSite=Lax`;
+      }
     }
   }, [activeWorkspaceId]);
 
@@ -67,6 +109,8 @@ export function AppShell({
             key: string;
             isPrivate?: boolean;
             taskCount?: number;
+            role?: string;
+            memberCount?: number;
           }>;
         }>(`/api/projects?workspaceId=${activeWorkspaceId}`);
 
@@ -78,6 +122,8 @@ export function AppShell({
               key: p.key,
               isPrivate: Boolean(p.isPrivate),
               taskCount: p.taskCount ?? 0,
+              role: p.role ?? "member",
+              memberCount: p.memberCount ?? 1,
             })),
           );
         }
@@ -102,7 +148,17 @@ export function AppShell({
 
   function handleWorkspaceSelect(id: string) {
     setActiveWorkspaceId(id);
-    router.refresh();
+    if (typeof document !== "undefined") {
+      document.cookie = `cla_flow_active_ws=${id}; path=/; max-age=31536000; SameSite=Lax`;
+    }
+    if (typeof window !== "undefined") {
+      localStorage.setItem("cla_flow_active_ws", id);
+    }
+    if (pathname === "/projects" || pathname.startsWith("/projects")) {
+      router.replace(`/projects?workspaceId=${id}`);
+    } else {
+      router.refresh();
+    }
   }
 
   function handleWorkspaceCreated(newWs: { id: string; name: string; slug: string }) {
@@ -114,8 +170,7 @@ export function AppShell({
       memberCount: 1,
     };
     setWorkspaces((prev) => [...prev, fullWs]);
-    setActiveWorkspaceId(newWs.id);
-    router.refresh();
+    handleWorkspaceSelect(newWs.id);
   }
 
   function handleProjectCreated(project: { id: string; name: string; key: string }) {
@@ -127,6 +182,8 @@ export function AppShell({
         key: project.key,
         isPrivate: false,
         taskCount: 0,
+        role: "owner",
+        memberCount: 1,
       },
     ]);
     router.push(`/p/${project.id}`);
@@ -142,68 +199,125 @@ export function AppShell({
   }
 
   return (
-    <div className={styles.shell}>
-      <WorkspaceRail
-        workspaces={workspaces}
-        activeWorkspaceId={activeWorkspace.id}
-        onSelectWorkspace={handleWorkspaceSelect}
-        onOpenNewWorkspace={() => setNewWorkspaceOpen(true)}
-        canCreateWorkspace={canCreateWorkspace}
-        user={user}
-      />
-
-      <WorkspaceSidebar
-        workspace={activeWorkspace}
-        projects={projects}
-        user={user}
-        onOpenSettings={() => setSettingsOpen(true)}
-        onOpenNewProject={() => setNewProjectOpen(true)}
-        collapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
-      />
-
-      <div className={styles.mainContainer}>
-        {sidebarCollapsed && (
-          <div className={styles.topBar}>
-            <button
-              className={styles.uncollapseBtn}
-              onClick={() => setSidebarCollapsed(false)}
-              title="Expand navigation sidebar"
-            >
-              <MenuIcon size={16} />
-              <span className={styles.uncollapseLabel}>Sidebar</span>
-            </button>
-            <span className={styles.topBarWorkspace}>{activeWorkspace.name}</span>
-          </div>
+    <WorkspaceContext.Provider
+      value={{
+        activeWorkspace,
+        activeWorkspaceId: activeWorkspace.id,
+        projects,
+        selectWorkspace: handleWorkspaceSelect,
+        openNewProject: () => setNewProjectOpen(true),
+        openSettings: () => setSettingsOpen(true),
+      }}
+    >
+      <div className={styles.shell}>
+        {/* Mobile drawer backdrop */}
+        {mobileOpen && (
+          <div
+            className={styles.backdrop}
+            onClick={() => setMobileOpen(false)}
+            aria-hidden="true"
+          />
         )}
-        <div className={styles.contentWrap}>{children}</div>
+
+        {/* Navigation drawer (desktop: inline rail + sidebar, mobile: off-canvas drawer) */}
+        <div className={`${styles.navDrawer} ${mobileOpen ? styles.navDrawerOpen : ""}`}>
+          <WorkspaceRail
+            workspaces={workspaces}
+            activeWorkspaceId={activeWorkspace.id}
+            onSelectWorkspace={(id) => {
+              handleWorkspaceSelect(id);
+              setMobileOpen(false);
+            }}
+            onOpenNewWorkspace={() => {
+              setNewWorkspaceOpen(true);
+              setMobileOpen(false);
+            }}
+            canCreateWorkspace={canCreateWorkspace}
+            user={user}
+          />
+
+          <WorkspaceSidebar
+            workspace={activeWorkspace}
+            projects={projects}
+            user={user}
+            onOpenSettings={() => {
+              setSettingsOpen(true);
+              setMobileOpen(false);
+            }}
+            onOpenNewProject={() => {
+              setNewProjectOpen(true);
+              setMobileOpen(false);
+            }}
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
+            myTaskCount={myTaskCount}
+            onCloseMobile={() => setMobileOpen(false)}
+            onNavigate={() => setMobileOpen(false)}
+          />
+        </div>
+
+        <div className={styles.mainContainer}>
+          {/* Mobile top bar visible on small screens */}
+          <div className={styles.mobileTopBar}>
+            <button
+              type="button"
+              className={styles.mobileMenuBtn}
+              onClick={() => setMobileOpen(true)}
+              aria-label="Open navigation menu"
+            >
+              <MenuIcon size={18} />
+            </button>
+            <div className={styles.mobileWorkspaceTitle}>
+              <span className={styles.mobileWsBadge}>
+                {activeWorkspace.name.slice(0, 2).toUpperCase()}
+              </span>
+              <span className={styles.mobileWsName}>{activeWorkspace.name}</span>
+            </div>
+          </div>
+
+          {/* Desktop uncollapse bar when sidebar is collapsed */}
+          {sidebarCollapsed && (
+            <div className={styles.topBar}>
+              <button
+                className={styles.uncollapseBtn}
+                onClick={() => setSidebarCollapsed(false)}
+                title="Expand navigation sidebar"
+              >
+                <MenuIcon size={16} />
+                <span className={styles.uncollapseLabel}>Sidebar</span>
+              </button>
+              <span className={styles.topBarWorkspace}>{activeWorkspace.name}</span>
+            </div>
+          )}
+          <div className={styles.contentWrap}>{children}</div>
+        </div>
+
+        <NewWorkspaceModal
+          open={newWorkspaceOpen}
+          onClose={() => setNewWorkspaceOpen(false)}
+          onCreated={handleWorkspaceCreated}
+        />
+
+        {activeWorkspace.id && (
+          <WorkspaceSettingsModal
+            open={settingsOpen}
+            workspace={activeWorkspace}
+            currentUserId={user.id}
+            onClose={() => setSettingsOpen(false)}
+            onWorkspaceUpdated={handleWorkspaceUpdated}
+          />
+        )}
+
+        {activeWorkspace.id && (
+          <NewProjectModal
+            open={newProjectOpen}
+            workspaceId={activeWorkspace.id}
+            workspaceName={activeWorkspace.name}
+            onClose={() => setNewProjectOpen(false)}
+            onCreated={handleProjectCreated}
+          />
+        )}
       </div>
-
-      <NewWorkspaceModal
-        open={newWorkspaceOpen}
-        onClose={() => setNewWorkspaceOpen(false)}
-        onCreated={handleWorkspaceCreated}
-      />
-
-      {activeWorkspace.id && (
-        <WorkspaceSettingsModal
-          open={settingsOpen}
-          workspace={activeWorkspace}
-          currentUserId={user.id}
-          onClose={() => setSettingsOpen(false)}
-          onWorkspaceUpdated={handleWorkspaceUpdated}
-        />
-      )}
-
-      {activeWorkspace.id && (
-        <NewProjectModal
-          open={newProjectOpen}
-          workspaceId={activeWorkspace.id}
-          workspaceName={activeWorkspace.name}
-          onClose={() => setNewProjectOpen(false)}
-          onCreated={handleProjectCreated}
-        />
-      )}
-    </div>
+    </WorkspaceContext.Provider>
   );
 }

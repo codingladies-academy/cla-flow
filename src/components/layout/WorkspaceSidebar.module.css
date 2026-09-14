@@ -347,3 +347,48 @@
 .collapseToggle:hover {
   color: var(--text-primary, #fff);
 }
+
+.mobileCloseBtn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--bg-hover, rgba(255, 255, 255, 0.08));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+  color: var(--text-muted, #aaa);
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.12s;
+}
+
+.mobileCloseBtn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.taskBadge {
+  font-size: 0.72rem;
+  background: var(--accent-primary, #00BFB3);
+  color: #000;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    width: 240px;
+    max-width: calc(100vw - 68px);
+    min-width: 0;
+  }
+
+  .mobileCloseBtn {
+    display: flex;
+  }
+
+  .footer {
+    display: none;
+  }
+}

@@ -2,14 +2,17 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/client";
 import { suggestProjectKey } from "@/lib/defaults";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Form";
 import { Tag } from "@/components/ui/Layout";
 import { type SessionUser } from "@/components/ui/UserMenu";
-import { LockIcon, SettingsIcon } from "@/components/ui/Icons";
+import { CheckSquareIcon, LockIcon, SettingsIcon } from "@/components/ui/Icons";
+import { MyTasksView } from "@/components/tasks/MyTasksView";
+import type { MyTaskItemDTO } from "@/lib/queries";
+import { useWorkspace } from "@/components/layout/AppShell";
 import styles from "./ProjectList.module.css";
 
 export type ProjectRow = {
@@ -22,15 +25,45 @@ export type ProjectRow = {
   isPrivate?: boolean;
 };
 
-export function ProjectList({ user, projects }: { user: SessionUser; projects: ProjectRow[] }) {
+export function ProjectList({
+  user,
+  projects,
+  myTasks = [],
+  initialTab = "projects",
+}: {
+  user: SessionUser;
+  projects: ProjectRow[];
+  myTasks?: MyTaskItemDTO[];
+  initialTab?: "projects" | "tasks";
+}) {
   const router = useRouter();
-  const first = projects.length === 0;
+  const wsCtx = useWorkspace();
+  const displayProjects: ProjectRow[] = wsCtx
+    ? wsCtx.projects.map((p) => ({
+        id: p.id,
+        name: p.name,
+        key: p.key,
+        role: p.role ?? "member",
+        taskCount: p.taskCount ?? 0,
+        memberCount: p.memberCount ?? 1,
+        isPrivate: p.isPrivate,
+      }))
+    : projects;
+
+  const [activeTab, setActiveTab] = useState<"projects" | "tasks">(initialTab);
+  const first = displayProjects.length === 0;
   const [adding, setAdding] = useState(first);
   const [name, setName] = useState("");
   const [key, setKey] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (displayProjects.length === 0) {
+      setAdding(true);
+    }
+  }, [displayProjects.length]);
 
   async function create(event: React.FormEvent) {
     event.preventDefault();
@@ -42,6 +75,7 @@ export function ProjectList({ user, projects }: { user: SessionUser; projects: P
         name: name.trim(),
         key: key.trim() || suggestProjectKey(name),
         isPrivate,
+        workspaceId: wsCtx?.activeWorkspaceId,
       });
       router.push(`/p/${project.id}`);
     } catch (err) {
@@ -54,18 +88,60 @@ export function ProjectList({ user, projects }: { user: SessionUser; projects: P
     <div className={styles.page}>
       <div className={styles.body}>
         <div className={styles.heading}>
-          <h1 className={styles.title}>Projects</h1>
+          <div className={styles.tabsRow}>
+            <button
+              type="button"
+              className={`${styles.tabBtn} ${activeTab === "projects" ? styles.tabBtnActive : ""}`}
+              onClick={() => setActiveTab("projects")}
+            >
+              Projects
+              <span className={styles.tabBadge}>{displayProjects.length}</span>
+            </button>
+            <button
+              type="button"
+              className={`${styles.tabBtn} ${activeTab === "tasks" ? styles.tabBtnActive : ""}`}
+              onClick={() => setActiveTab("tasks")}
+            >
+              <CheckSquareIcon size={14} />
+              Assigned to Me
+              {myTasks.length > 0 && (
+                <span className={styles.tabBadgeHighlight}>{myTasks.length}</span>
+              )}
+            </button>
+          </div>
         </div>
 
-        {first && (
-          <p className={styles.empty}>
-            A project is one board. It arrives with a full set of properties — Status, Priority,
-            Assignee and the rest — and every one of them is yours to rename or delete.
-          </p>
-        )}
+        {activeTab === "tasks" ? (
+          <MyTasksView tasks={myTasks} />
+        ) : (
+          <>
+            {myTasks.length > 0 && (
+              <div className={styles.assignedBanner}>
+                <div className={styles.assignedBannerContent}>
+                  <CheckSquareIcon size={16} />
+                  <span>
+                    You have <strong>{myTasks.length} {myTasks.length === 1 ? "task" : "tasks"}</strong> assigned to you across projects.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className={styles.assignedBannerBtn}
+                  onClick={() => setActiveTab("tasks")}
+                >
+                  View your tasks →
+                </button>
+              </div>
+            )}
+
+            {first && (
+              <p className={styles.empty}>
+                A project is one board. It arrives with a full set of properties — Status, Priority,
+                Assignee and the rest — and every one of them is yours to rename or delete.
+              </p>
+            )}
 
         <div className={styles.grid}>
-          {projects.map((project) => (
+          {displayProjects.map((project) => (
             <div key={project.id} className={styles.cardWrap}>
               <Link href={`/p/${project.id}`} className={styles.card}>
                 <div className={styles.cardTop}>
@@ -143,7 +219,7 @@ export function ProjectList({ user, projects }: { user: SessionUser; projects: P
                 <Button type="submit" disabled={busy}>
                   {busy ? "Creating…" : "Create project"}
                 </Button>
-                {projects.length > 0 && (
+                {displayProjects.length > 0 && (
                   <Button variant="ghost" onClick={() => setAdding(false)}>
                     Cancel
                   </Button>
@@ -159,6 +235,8 @@ export function ProjectList({ user, projects }: { user: SessionUser; projects: P
             </button>
           )}
         </div>
+          </>
+        )}
       </div>
     </div>
   );

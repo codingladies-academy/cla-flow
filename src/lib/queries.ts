@@ -876,4 +876,106 @@ export async function commentRow(commentId: string) {
   return row ?? null;
 }
 
+export type MyTaskItemDTO = {
+  id: string;
+  number: number;
+  key: string;
+  title: string;
+  description: string | null;
+  projectId: string;
+  projectName: string;
+  projectKey: string;
+  workspaceId: string | null;
+  workspaceName: string | null;
+  updatedAt: Date;
+  statusName?: string | null;
+  statusColor?: string | null;
+};
+
+export async function listMyTasks(userId: string): Promise<MyTaskItemDTO[]> {
+  const rows = await db
+    .select({
+      id: tasks.id,
+      number: tasks.number,
+      title: tasks.title,
+      description: tasks.description,
+      updatedAt: tasks.updatedAt,
+      projectId: projects.id,
+      projectName: projects.name,
+      projectKey: projects.key,
+      workspaceId: projects.workspaceId,
+      workspaceName: workspaces.name,
+    })
+    .from(taskValues)
+    .innerJoin(properties, eq(taskValues.propertyId, properties.id))
+    .innerJoin(tasks, eq(taskValues.taskId, tasks.id))
+    .innerJoin(projects, eq(tasks.projectId, projects.id))
+    .leftJoin(workspaces, eq(projects.workspaceId, workspaces.id))
+    .where(
+      and(
+        eq(properties.type, "person"),
+        sql`(${taskValues.value} = ${JSON.stringify(userId)}::jsonb OR (jsonb_typeof(${taskValues.value}) = 'array' AND ${taskValues.value} @> ${JSON.stringify([userId])}::jsonb))`
+      )
+    )
+    .orderBy(desc(tasks.updatedAt));
+
+  const seen = new Set<string>();
+  const uniqueTasks: typeof rows = [];
+  for (const r of rows) {
+    if (!seen.has(r.id)) {
+      seen.add(r.id);
+      uniqueTasks.push(r);
+    }
+  }
+
+  if (uniqueTasks.length === 0) return [];
+
+  const taskIds = uniqueTasks.map((t) => t.id);
+
+  const statusValues = await db
+    .select({
+      taskId: taskValues.taskId,
+      optionName: propertyOptions.name,
+      optionColor: propertyOptions.color,
+    })
+    .from(taskValues)
+    .innerJoin(properties, eq(taskValues.propertyId, properties.id))
+    .innerJoin(
+      propertyOptions,
+      sql`${taskValues.value} = to_jsonb(${propertyOptions.id}::text)`
+    )
+    .where(
+      and(
+        inArray(taskValues.taskId, taskIds),
+        or(
+          sql`lower(${properties.name}) = 'status'`,
+          eq(properties.type, "select")
+        )
+      )
+    );
+
+  const statusMap = new Map<string, { name: string; color: string }>();
+  for (const sv of statusValues) {
+    if (!statusMap.has(sv.taskId)) {
+      statusMap.set(sv.taskId, { name: sv.optionName, color: sv.optionColor });
+    }
+  }
+
+  return uniqueTasks.map((t) => ({
+    id: t.id,
+    number: t.number,
+    key: `${t.projectKey}-${t.number}`,
+    title: t.title,
+    description: t.description,
+    projectId: t.projectId,
+    projectName: t.projectName,
+    projectKey: t.projectKey,
+    workspaceId: t.workspaceId,
+    workspaceName: t.workspaceName,
+    updatedAt: t.updatedAt,
+    statusName: statusMap.get(t.id)?.name ?? null,
+    statusColor: statusMap.get(t.id)?.color ?? null,
+  }));
+}
+
 export { and, eq };

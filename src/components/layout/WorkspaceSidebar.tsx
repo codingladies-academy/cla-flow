@@ -5,8 +5,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import type { SessionUser } from "@/components/ui/UserMenu";
 import {
+  CheckSquareIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  CloseIcon,
   EditIcon,
   GridIcon,
   HashIcon,
@@ -22,6 +24,8 @@ export type SidebarProject = {
   key: string;
   isPrivate: boolean;
   taskCount?: number;
+  role?: string;
+  memberCount?: number;
 };
 
 export function WorkspaceSidebar({
@@ -32,6 +36,9 @@ export function WorkspaceSidebar({
   onOpenNewProject,
   collapsed,
   onToggleCollapse,
+  myTaskCount = 0,
+  onCloseMobile,
+  onNavigate,
 }: {
   workspace: { id: string; name: string; slug: string; role: string };
   projects: SidebarProject[];
@@ -40,6 +47,9 @@ export function WorkspaceSidebar({
   onOpenNewProject: () => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
+  myTaskCount?: number;
+  onCloseMobile?: () => void;
+  onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -68,15 +78,29 @@ export function WorkspaceSidebar({
           </div>
         </div>
 
-        <button
-          type="button"
-          className={styles.newProjectIconBtn}
-          onClick={onOpenSettings}
-          title="Edit Workspace"
-          aria-label="Edit Workspace"
-        >
-          <EditIcon size={14} />
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <button
+            type="button"
+            className={styles.newProjectIconBtn}
+            onClick={onOpenSettings}
+            title="Edit Workspace"
+            aria-label="Edit Workspace"
+          >
+            <EditIcon size={14} />
+          </button>
+
+          {onCloseMobile && (
+            <button
+              type="button"
+              className={styles.mobileCloseBtn}
+              onClick={onCloseMobile}
+              title="Close navigation"
+              aria-label="Close navigation"
+            >
+              <CloseIcon size={14} />
+            </button>
+          )}
+        </div>
 
         {menuOpen && (
           <>
@@ -117,12 +141,25 @@ export function WorkspaceSidebar({
           <Link
             href="/projects"
             className={`${styles.navItem} ${pathname === "/projects" ? styles.navItemActive : ""}`}
+            onClick={onNavigate}
           >
             <span className={styles.itemIcon}>
               <GridIcon size={15} />
             </span>
             <span className={styles.itemLabel}>All Projects</span>
             <span className={styles.badge}>{projects.length}</span>
+          </Link>
+
+          <Link
+            href="/my-tasks"
+            className={`${styles.navItem} ${pathname === "/my-tasks" ? styles.navItemActive : ""}`}
+            onClick={onNavigate}
+          >
+            <span className={styles.itemIcon}>
+              <CheckSquareIcon size={15} />
+            </span>
+            <span className={styles.itemLabel}>My Tasks</span>
+            {myTaskCount > 0 && <span className={styles.taskBadge}>{myTaskCount}</span>}
           </Link>
         </div>
 
@@ -158,6 +195,7 @@ export function WorkspaceSidebar({
                     key={proj.id}
                     href={href}
                     className={`${styles.projectItem} ${isActive ? styles.projectItemActive : ""}`}
+                    onClick={onNavigate}
                   >
                     <span className={styles.projectSymbol}>
                       {proj.isPrivate ? <LockIcon size={13} /> : <HashIcon size={13} />}
