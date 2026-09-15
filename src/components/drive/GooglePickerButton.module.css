@@ -1,0 +1,32 @@
+.driveBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: 1px solid var(--border, #2d3139);
+  color: var(--text-secondary, #9aa0a6);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  height: 28px;
+}
+
+.driveBtn:hover:not(:disabled) {
+  background: var(--surface-hover, #1f232b);
+  border-color: #4285f4;
+  color: #4285f4;
+}
+
+.driveBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.iconOnly {
+  padding: 4px;
+  width: 28px;
+  justify-content: center;
+}

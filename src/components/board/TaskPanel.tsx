@@ -27,6 +27,8 @@ import type {
 import { Avatar } from "@/components/ui/Avatar";
 import { useNow } from "@/components/ui/useElapsed";
 import { useDismiss } from "@/components/ui/useDismiss";
+import { GooglePickerButton } from "@/components/drive/GooglePickerButton";
+import { GoogleDriveCardList } from "@/components/drive/GoogleDriveCard";
 import { PropertyControl } from "./controls/PropertyControl";
 import { isTyping } from "./keys";
 import { Markdown } from "./Markdown";
@@ -651,10 +653,20 @@ function Description({ value, onCommit }: { value: string; onCommit: (v: string)
       <div className={styles.blockHead}>
         <span className="label">Description</span>
         <span style={{ flex: 1 }} />
-        <span className={styles.hint}>
-          <span className={styles.kbd}>MD</span>
-          {editing ? "Cmd + Enter saves" : "click to edit"}
-        </span>
+        {editing ? (
+          <GooglePickerButton
+            onFileSelect={(item) => {
+              const link = `[${item.name}](${item.url})`;
+              setDraft((prev) => (prev ? `${prev}\n${link}` : link));
+            }}
+            label="Drive"
+          />
+        ) : (
+          <span className={styles.hint}>
+            <span className={styles.kbd}>MD</span>
+            click to edit
+          </span>
+        )}
       </div>
       {editing ? (
         <textarea
@@ -686,7 +698,14 @@ function Description({ value, onCommit }: { value: string; onCommit: (v: string)
           tabIndex={0}
           onKeyDown={(e) => e.key === "Enter" && setEditing(true)}
         >
-          {value.trim() ? <Markdown text={value} /> : "Add a description…"}
+          {value.trim() ? (
+            <>
+              <Markdown text={value} />
+              <GoogleDriveCardList text={value} />
+            </>
+          ) : (
+            "Add a description…"
+          )}
         </div>
       )}
     </div>
@@ -914,7 +933,10 @@ function Comments({
                 </button>
               )}
             </div>
-            <div className={styles.commentText}>{comment.body}</div>
+            <div className={styles.commentText}>
+              {comment.body}
+              <GoogleDriveCardList text={comment.body} />
+            </div>
           </div>
         </div>
       ))}
@@ -936,6 +958,13 @@ function Comments({
             }}
           />
           <div className={styles.composerFoot}>
+            <GooglePickerButton
+              onFileSelect={(item) => {
+                const link = `[${item.name}](${item.url})`;
+                setDraft((prev) => (prev ? `${prev}\n${link}` : link));
+              }}
+              label="Attach Drive"
+            />
             <span style={{ fontSize: 10.5, color: "var(--faint-3)" }}>Cmd + Enter to send</span>
             <span style={{ flex: 1 }} />
             <button

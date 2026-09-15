@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import type { SessionUser } from "@/components/ui/UserMenu";
 import {
+  ChatIcon,
   CheckSquareIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -37,6 +38,8 @@ export function WorkspaceSidebar({
   collapsed,
   onToggleCollapse,
   myTaskCount = 0,
+  chatUnreadCount = 0,
+  onOpenChat,
   onCloseMobile,
   onNavigate,
 }: {
@@ -48,6 +51,8 @@ export function WorkspaceSidebar({
   collapsed: boolean;
   onToggleCollapse: () => void;
   myTaskCount?: number;
+  chatUnreadCount?: number;
+  onOpenChat?: () => void;
   onCloseMobile?: () => void;
   onNavigate?: () => void;
 }) {
@@ -161,6 +166,24 @@ export function WorkspaceSidebar({
             <span className={styles.itemLabel}>My Tasks</span>
             {myTaskCount > 0 && <span className={styles.taskBadge}>{myTaskCount}</span>}
           </Link>
+
+          {onOpenChat && (
+            <button
+              type="button"
+              className={styles.navItem}
+              onClick={() => {
+                onOpenChat();
+                onNavigate?.();
+              }}
+              style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer" }}
+            >
+              <span className={styles.itemIcon}>
+                <ChatIcon size={15} />
+              </span>
+              <span className={styles.itemLabel}>Staff Chat</span>
+              {chatUnreadCount > 0 && <span className={styles.taskBadge}>{chatUnreadCount}</span>}
+            </button>
+          )}
         </div>
 
         <div className={styles.section}>

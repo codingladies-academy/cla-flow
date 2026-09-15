@@ -1,14 +1,16 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { api } from "@/lib/client";
+import { playNotificationSound, sendDesktopNotification } from "@/lib/audio";
 import type { SessionUser } from "@/components/ui/UserMenu";
 import { WorkspaceRail, type WorkspaceDTO } from "./WorkspaceRail";
 import { WorkspaceSidebar, type SidebarProject } from "./WorkspaceSidebar";
 import { NewWorkspaceModal } from "@/components/workspaces/NewWorkspaceModal";
 import { WorkspaceSettingsModal } from "@/components/workspaces/WorkspaceSettingsModal";
 import { NewProjectModal } from "@/components/workspaces/NewProjectModal";
+import { ChatPanel } from "@/components/chat/ChatPanel";
 import { MenuIcon } from "@/components/ui/Icons";
 import styles from "./AppShell.module.css";
 
@@ -19,6 +21,7 @@ export type WorkspaceContextType = {
   selectWorkspace: (id: string) => void;
   openNewProject: () => void;
   openSettings: () => void;
+  openChat: () => void;
 };
 
 export const WorkspaceContext = createContext<WorkspaceContextType | null>(null);
@@ -64,6 +67,62 @@ export function AppShell({
   const [newWorkspaceOpen, setNewWorkspaceOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const prevUnreadRef = useRef<number>(-1);
+
+  // Tab Title Badge & Notifications
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    // Clean existing title of any previous (N) badge
+    const current = document.title.replace(/^\(\d+\)\s*/, "");
+    if (chatUnreadCount > 0) {
+      document.title = `(${chatUnreadCount}) ${current}`;
+    } else {
+      document.title = current;
+    }
+  }, [chatUnreadCount, pathname]);
+
+  // Periodically check for unread chat messages
+  useEffect(() => {
+    let cancelled = false;
+    async function checkUnread() {
+      try {
+        const url = activeWorkspaceId
+          ? `/api/chat/rooms?workspaceId=${activeWorkspaceId}`
+          : "/api/chat/rooms";
+        const res = await api.get<{
+          globalRoom: { unreadCount: number };
+          workspaceRooms: Array<{ unreadCount: number }>;
+          directRooms: Array<{ unreadCount: number }>;
+        }>(url);
+
+        if (!cancelled) {
+          const total =
+            (res.globalRoom?.unreadCount ?? 0) +
+            (res.workspaceRooms?.reduce((sum, r) => sum + (r.unreadCount ?? 0), 0) ?? 0) +
+            (res.directRooms?.reduce((sum, r) => sum + (r.unreadCount ?? 0), 0) ?? 0);
+
+          if (prevUnreadRef.current !== -1 && total > prevUnreadRef.current) {
+            playNotificationSound();
+            sendDesktopNotification("CLA Flow Chat", `You have ${total} unread messages.`, () =>
+              setChatOpen(true),
+            );
+          }
+          prevUnreadRef.current = total;
+          setChatUnreadCount(total);
+        }
+      } catch {}
+    }
+
+    checkUnread();
+    const timer = setInterval(checkUnread, 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [activeWorkspaceId]);
 
   // Sync state if server passes updated activeWorkspaceId or projects
   useEffect(() => {
@@ -154,11 +213,7 @@ export function AppShell({
     if (typeof window !== "undefined") {
       localStorage.setItem("cla_flow_active_ws", id);
     }
-    if (pathname === "/projects" || pathname.startsWith("/projects")) {
-      router.replace(`/projects?workspaceId=${id}`);
-    } else {
-      router.refresh();
-    }
+    router.push(`/projects?workspaceId=${id}`);
   }
 
   function handleWorkspaceCreated(newWs: { id: string; name: string; slug: string }) {
@@ -207,6 +262,7 @@ export function AppShell({
         selectWorkspace: handleWorkspaceSelect,
         openNewProject: () => setNewProjectOpen(true),
         openSettings: () => setSettingsOpen(true),
+        openChat: () => setChatOpen(true),
       }}
     >
       <div className={styles.shell}>
@@ -248,6 +304,8 @@ export function AppShell({
               setNewProjectOpen(true);
               setMobileOpen(false);
             }}
+            onOpenChat={() => setChatOpen(true)}
+            chatUnreadCount={chatUnreadCount}
             collapsed={sidebarCollapsed}
             onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
             myTaskCount={myTaskCount}
@@ -317,6 +375,15 @@ export function AppShell({
             onCreated={handleProjectCreated}
           />
         )}
+
+        <ChatPanel
+          open={chatOpen}
+          onClose={() => setChatOpen(false)}
+          user={user}
+          activeWorkspaceId={activeWorkspace.id}
+          activeWorkspaceName={activeWorkspace.name}
+          onUnreadCountChange={(c) => setChatUnreadCount(c)}
+        />
       </div>
     </WorkspaceContext.Provider>
   );

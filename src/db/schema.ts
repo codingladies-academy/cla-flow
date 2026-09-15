@@ -408,3 +408,61 @@ export const agentRunLog = pgTable(
   },
   (t) => [index("agent_run_log_run_idx").on(t.runId)],
 );
+
+/* ------------------------------------------------------------------ */
+/* Staff Chat                                                          */
+/* ------------------------------------------------------------------ */
+
+export const chatRooms = pgTable(
+  "chat_rooms",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** "global" | "workspace" | "direct" */
+    kind: text("kind").notNull().default("direct"),
+    /** Nullable for global & direct messages, populated for workspace chat */
+    workspaceId: uuid("workspace_id").references(() => workspaces.id, { onDelete: "cascade" }),
+    name: text("name"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("chat_rooms_workspace_idx").on(t.workspaceId),
+    index("chat_rooms_kind_idx").on(t.kind),
+  ],
+);
+
+export const chatRoomMembers = pgTable(
+  "chat_room_members",
+  {
+    roomId: uuid("room_id")
+      .notNull()
+      .references(() => chatRooms.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    lastReadAt: timestamp("last_read_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.roomId, t.userId] }),
+    index("chat_room_members_user_idx").on(t.userId),
+  ],
+);
+
+export const chatMessages = pgTable(
+  "chat_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    roomId: uuid("room_id")
+      .notNull()
+      .references(() => chatRooms.id, { onDelete: "cascade" }),
+    senderId: uuid("sender_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("chat_messages_room_created_idx").on(t.roomId, t.createdAt),
+    index("chat_messages_sender_idx").on(t.senderId),
+  ],
+);
+

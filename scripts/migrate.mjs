@@ -37,7 +37,7 @@ try {
   try {
     const fs = await import("fs");
     const path = await import("path");
-    const files = ["0005_chief_deadpool.sql", "0006_workspaces.sql"];
+    const files = ["0005_chief_deadpool.sql", "0006_workspaces.sql", "0007_chat.sql"];
     for (const f of files) {
       const p = path.resolve("./drizzle", f);
       if (fs.existsSync(p)) {
