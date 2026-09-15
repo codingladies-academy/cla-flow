@@ -30,6 +30,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+        NEXT_PUBLIC_GOOGLE_API_KEY: ${NEXT_PUBLIC_GOOGLE_API_KEY}
+        NEXT_PUBLIC_GOOGLE_APP_ID: ${NEXT_PUBLIC_GOOGLE_APP_ID}
     restart: unless-stopped
     environment:
       DATABASE_URL: postgres://codingladies:${POSTGRES_PASSWORD:-cla_flow_pass_2026}@db:5432/codingladies
