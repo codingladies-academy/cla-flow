@@ -36,6 +36,9 @@ services:
       CLA_ADMIN_EMAIL: ${CLA_ADMIN_EMAIL:-claude@codingladies.org}
       USHABTI_SIGNUP: ${USHABTI_SIGNUP:-open}
       NODE_ENV: production
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+      NEXT_PUBLIC_GOOGLE_API_KEY: ${NEXT_PUBLIC_GOOGLE_API_KEY}
+      NEXT_PUBLIC_GOOGLE_APP_ID: ${NEXT_PUBLIC_GOOGLE_APP_ID} 
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
