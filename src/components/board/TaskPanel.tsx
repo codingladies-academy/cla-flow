@@ -653,16 +653,22 @@ function Description({ value, onCommit }: { value: string; onCommit: (v: string)
       <div className={styles.blockHead}>
         <span className="label">Description</span>
         <span style={{ flex: 1 }} />
-        {editing ? (
-          <GooglePickerButton
-            onFileSelect={(item) => {
-              const link = `[${item.name}](${item.url})`;
-              setDraft((prev) => (prev ? `${prev}\n${link}` : link));
-            }}
-            label="Drive"
-          />
-        ) : (
-          <span className={styles.hint}>
+        <GooglePickerButton
+          onFileSelect={(item) => {
+            const link = `[${item.name}](${item.url})`;
+            const current = editing ? draft : value;
+            const updated = current.trim() ? `${current.trim()}\n${link}` : link;
+            setDraft(updated);
+            onCommit(updated);
+          }}
+          label="Drive"
+        />
+        {!editing && (
+          <span
+            className={styles.hint}
+            onClick={() => setEditing(true)}
+            style={{ cursor: "pointer" }}
+          >
             <span className={styles.kbd}>MD</span>
             click to edit
           </span>
@@ -675,7 +681,13 @@ function Description({ value, onCommit }: { value: string; onCommit: (v: string)
           value={draft}
           placeholder="Write in markdown…"
           onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => {
+          onBlur={(e) => {
+            if (
+              e.relatedTarget &&
+              e.currentTarget.parentElement?.contains(e.relatedTarget as Node)
+            ) {
+              return;
+            }
             setEditing(false);
             if (draft !== value) onCommit(draft);
           }}

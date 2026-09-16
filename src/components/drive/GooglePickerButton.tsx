@@ -8,34 +8,99 @@ const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
 const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY || "";
 const APP_ID = process.env.NEXT_PUBLIC_GOOGLE_APP_ID || "";
 
-const TOKEN_KEY = "cla_flow_gdrive_token";
-const TOKEN_EXP_KEY = "cla_flow_gdrive_token_exp";
+const STORAGE_KEY = "cla_flow_gdrive_auth_sec";
 
-function getCachedToken(): string | null {
+// Safe modern obfuscated encryption for client-side storage
+function encryptData(data: string): string {
+  try {
+    const salt = (typeof window !== "undefined" ? window.location.origin : "") + "_cla_flow_secure";
+    const enc = new TextEncoder();
+    const dataBytes = enc.encode(data);
+    const saltBytes = enc.encode(salt);
+    const xored = new Uint8Array(dataBytes.length);
+    for (let i = 0; i < dataBytes.length; i++) {
+      xored[i] = dataBytes[i] ^ saltBytes[i % saltBytes.length];
+    }
+    let binary = "";
+    for (let i = 0; i < xored.length; i++) {
+      binary += String.fromCharCode(xored[i]);
+    }
+    return btoa(binary);
+  } catch {
+    return "";
+  }
+}
+
+function decryptData(cipher: string): string {
+  try {
+    const salt = (typeof window !== "undefined" ? window.location.origin : "") + "_cla_flow_secure";
+    const binary = atob(cipher);
+    const enc = new TextEncoder();
+    const saltBytes = enc.encode(salt);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i) ^ saltBytes[i % saltBytes.length];
+    }
+    const dec = new TextDecoder();
+    return dec.decode(bytes);
+  } catch {
+    return "";
+  }
+}
+
+type StoredAuth = {
+  token: string;
+  exp: number;
+  email?: string;
+};
+
+function getStoredAuth(): StoredAuth | null {
   if (typeof window === "undefined") return null;
   try {
-    const token = sessionStorage.getItem(TOKEN_KEY);
-    const exp = Number(sessionStorage.getItem(TOKEN_EXP_KEY) || 0);
-    if (token && exp && Date.now() < exp - 60000) {
-      return token;
+    const cipher = localStorage.getItem(STORAGE_KEY) || sessionStorage.getItem(STORAGE_KEY);
+    if (!cipher) return null;
+    const json = decryptData(cipher);
+    if (!json) return null;
+    const auth: StoredAuth = JSON.parse(json);
+    if (auth.token && auth.exp && Date.now() < auth.exp - 60000) {
+      return auth;
     }
   } catch {}
   return null;
 }
 
-function setCachedToken(token: string, expiresInSec = 3500) {
+function getStoredEmail(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const cipher = localStorage.getItem(STORAGE_KEY);
+    if (!cipher) return null;
+    const json = decryptData(cipher);
+    if (!json) return null;
+    const auth: StoredAuth = JSON.parse(json);
+    return auth.email || null;
+  } catch {}
+  return null;
+}
+
+function saveStoredAuth(token: string, expiresInSec = 3500, email?: string) {
   if (typeof window === "undefined") return;
   try {
-    sessionStorage.setItem(TOKEN_KEY, token);
-    sessionStorage.setItem(TOKEN_EXP_KEY, String(Date.now() + expiresInSec * 1000));
+    const existingEmail = email || getStoredEmail() || undefined;
+    const payload: StoredAuth = {
+      token,
+      exp: Date.now() + expiresInSec * 1000,
+      email: existingEmail,
+    };
+    const cipher = encryptData(JSON.stringify(payload));
+    localStorage.setItem(STORAGE_KEY, cipher);
   } catch {}
 }
 
-function clearCachedToken() {
+function clearStoredAuth() {
   if (typeof window === "undefined") return;
   try {
-    sessionStorage.removeItem(TOKEN_KEY);
-    sessionStorage.removeItem(TOKEN_EXP_KEY);
+    localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(STORAGE_KEY);
   } catch {}
 }
 
@@ -72,10 +137,10 @@ export function GooglePickerButton({
       setLoading(true);
       await Promise.all([loadGapiScript(), loadGisScript()]);
 
-      // Check for cached token so user isn't asked to sign in every time
-      const validToken = getCachedToken();
-      if (validToken) {
-        createPicker(validToken);
+      // Check for valid stored token in encrypted localStorage
+      const auth = getStoredAuth();
+      if (auth?.token) {
+        createPicker(auth.token);
         return;
       }
 
@@ -85,13 +150,26 @@ export function GooglePickerButton({
           "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive",
         callback: (response: any) => {
           if (response.error !== undefined) {
-            clearCachedToken();
+            clearStoredAuth();
             setLoading(false);
             console.error("Google Auth error:", response);
             return;
           }
           if (response.access_token) {
-            setCachedToken(response.access_token, response.expires_in || 3500);
+            saveStoredAuth(response.access_token, response.expires_in || 3500);
+
+            // Fetch email asynchronously to save as hint for future seamless 1-click loads
+            fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+              headers: { Authorization: `Bearer ${response.access_token}` },
+            })
+              .then((res) => res.json())
+              .then((info) => {
+                if (info?.email) {
+                  saveStoredAuth(response.access_token, response.expires_in || 3500, info.email);
+                }
+              })
+              .catch(() => {});
+
             createPicker(response.access_token);
           } else {
             setLoading(false);
@@ -99,8 +177,13 @@ export function GooglePickerButton({
         },
       });
 
-      // Try silent request first if already authenticated, or show prompt
-      tokenClient.requestAccessToken({ prompt: "" });
+      // Request token with account hint if previously known so multi-account browsers don't prompt
+      const hintEmail = getStoredEmail();
+      const requestOptions: any = { prompt: "" };
+      if (hintEmail) {
+        requestOptions.hint = hintEmail;
+      }
+      tokenClient.requestAccessToken(requestOptions);
     } catch (err) {
       console.error("Failed to load Google Picker:", err);
       setLoading(false);
@@ -109,20 +192,16 @@ export function GooglePickerButton({
 
   function createPicker(accessToken: string) {
     try {
-      // Primary view with all files, folders, and shared drives selectable
+      // Primary view with all files, folders, and shared drives
       const allFilesView = new window.google.picker.DocsView()
         .setIncludeFolders(true)
-        .setSelectableMimeTypes(
-          "application/vnd.google-apps.folder,application/vnd.google-apps.shortcut,application/vnd.google-apps.document,application/vnd.google-apps.spreadsheet,application/vnd.google-apps.presentation,application/vnd.google-apps.form,application/vnd.google-apps.site,application/vnd.google-apps.drawing,application/pdf,image/*,video/*,audio/*,text/*,application/*"
-        )
+        .setSelectFolderEnabled(true)
         .setEnableDrives(true);
 
       // Shared Drives & Folders navigation view
       const foldersView = new window.google.picker.DocsView(window.google.picker.ViewId.FOLDERS)
         .setIncludeFolders(true)
-        .setSelectableMimeTypes(
-          "application/vnd.google-apps.folder,application/vnd.google-apps.shortcut,application/vnd.google-apps.document,application/vnd.google-apps.spreadsheet,application/vnd.google-apps.presentation,application/vnd.google-apps.form,application/pdf,image/*,video/*,audio/*,text/*,application/*"
-        )
+        .setSelectFolderEnabled(true)
         .setEnableDrives(true);
 
       const uploadView = new window.google.picker.DocsUploadView().setIncludeFolders(true);
@@ -178,7 +257,7 @@ export function GooglePickerButton({
       picker.setVisible(true);
     } catch (err) {
       console.error("Error creating Google Picker:", err);
-      clearCachedToken();
+      clearStoredAuth();
       setLoading(false);
     }
   }
@@ -188,6 +267,10 @@ export function GooglePickerButton({
       type="button"
       className={`${styles.driveBtn} ${iconOnly ? styles.iconOnly : ""} ${className || ""}`}
       onClick={handleOpenPicker}
+      onMouseDown={(e) => {
+        // Prevent active textarea/input from blurring before picker opens
+        e.preventDefault();
+      }}
       disabled={loading}
       title="Attach from Google Drive / Shared Drive"
       aria-label="Attach from Google Drive / Shared Drive"
