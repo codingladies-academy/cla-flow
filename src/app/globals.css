@@ -267,3 +267,10 @@ body.ushabti-dragging * {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* Google Picker dialog overlay */
+.picker-dialog,
+.picker-dialog-bg {
+  z-index: 99999 !important;
+}
+

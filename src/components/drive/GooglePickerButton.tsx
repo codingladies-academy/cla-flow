@@ -8,6 +8,37 @@ const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
 const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY || "";
 const APP_ID = process.env.NEXT_PUBLIC_GOOGLE_APP_ID || "";
 
+const TOKEN_KEY = "cla_flow_gdrive_token";
+const TOKEN_EXP_KEY = "cla_flow_gdrive_token_exp";
+
+function getCachedToken(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const token = sessionStorage.getItem(TOKEN_KEY);
+    const exp = Number(sessionStorage.getItem(TOKEN_EXP_KEY) || 0);
+    if (token && exp && Date.now() < exp - 60000) {
+      return token;
+    }
+  } catch {}
+  return null;
+}
+
+function setCachedToken(token: string, expiresInSec = 3500) {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(TOKEN_KEY, token);
+    sessionStorage.setItem(TOKEN_EXP_KEY, String(Date.now() + expiresInSec * 1000));
+  } catch {}
+}
+
+function clearCachedToken() {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(TOKEN_EXP_KEY);
+  } catch {}
+}
+
 export function GooglePickerButton({
   onFileSelect,
   label = "Drive",
@@ -39,13 +70,14 @@ export function GooglePickerButton({
 
     try {
       setLoading(true);
-      // Clear any legacy cached tokens so revoked permissions trigger fresh consent
-      try {
-        sessionStorage.removeItem("cla_flow_gdrive_token");
-        sessionStorage.removeItem("cla_flow_gdrive_token_exp");
-      } catch {}
-
       await Promise.all([loadGapiScript(), loadGisScript()]);
+
+      // Check for cached token so user isn't asked to sign in every time
+      const validToken = getCachedToken();
+      if (validToken) {
+        createPicker(validToken);
+        return;
+      }
 
       const tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
@@ -53,11 +85,13 @@ export function GooglePickerButton({
           "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive",
         callback: (response: any) => {
           if (response.error !== undefined) {
+            clearCachedToken();
             setLoading(false);
             console.error("Google Auth error:", response);
             return;
           }
           if (response.access_token) {
+            setCachedToken(response.access_token, response.expires_in || 3500);
             createPicker(response.access_token);
           } else {
             setLoading(false);
@@ -65,8 +99,8 @@ export function GooglePickerButton({
         },
       });
 
-      // Request access token - GIS will show the consent dialog if permissions were revoked or missing
-      tokenClient.requestAccessToken();
+      // Try silent request first if already authenticated, or show prompt
+      tokenClient.requestAccessToken({ prompt: "" });
     } catch (err) {
       console.error("Failed to load Google Picker:", err);
       setLoading(false);
@@ -144,6 +178,7 @@ export function GooglePickerButton({
       picker.setVisible(true);
     } catch (err) {
       console.error("Error creating Google Picker:", err);
+      clearCachedToken();
       setLoading(false);
     }
   }
