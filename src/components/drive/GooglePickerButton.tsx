@@ -133,6 +133,10 @@ export function GooglePickerButton({
         pickerBuilder.setAppId(APP_ID);
       }
 
+      if (typeof window !== "undefined" && window.location.origin) {
+        pickerBuilder.setOrigin(window.location.origin);
+      }
+
       const picker = pickerBuilder.build();
       picker.setVisible(true);
     } catch (err) {
