@@ -23,13 +23,17 @@ export const DELETE = route(async (_req: Request, { params }: { params: Promise<
   return json({ ok: true });
 });
 
-/** Update a staff account's details (photoUrl, name). */
+/** Update a staff/volunteer account's details (photoUrl, name, userType). */
 export const PATCH = route(async (req: Request, { params }: { params: Promise<{ userId: string }> }) => {
   await requireAdmin();
   const { userId } = await params;
-  const input = await (req.json ? req.json() : {}) as { photoUrl?: string | null; name?: string };
+  const input = (await (req.json ? req.json() : {})) as {
+    photoUrl?: string | null;
+    name?: string;
+    userType?: "staff" | "volunteer";
+  };
 
-  const patch: { photoUrl?: string | null; name?: string } = {};
+  const patch: { photoUrl?: string | null; name?: string; userType?: string } = {};
 
   if (input.photoUrl !== undefined) {
     if (input.photoUrl === null || input.photoUrl.trim() === "") {
@@ -48,11 +52,24 @@ export const PATCH = route(async (req: Request, { params }: { params: Promise<{ 
     if (trimmed) patch.name = trimmed;
   }
 
+  if (input.userType !== undefined) {
+    if (input.userType === "volunteer" || input.userType === "staff") {
+      patch.userType = input.userType;
+    }
+  }
+
   const [updated] = await db
     .update(users)
     .set(patch)
     .where(eq(users.id, userId))
-    .returning({ id: users.id, name: users.name, email: users.email, photoUrl: users.photoUrl, color: users.color });
+    .returning({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      photoUrl: users.photoUrl,
+      color: users.color,
+      userType: users.userType,
+    });
 
   if (!updated) throw new HttpError(404, "User not found.");
 

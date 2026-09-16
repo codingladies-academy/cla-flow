@@ -28,23 +28,39 @@ function generateTempPassword(): string {
 export const GET = route(async () => {
   await requireAdmin();
   const rows = await db
-    .select({ id: users.id, email: users.email, name: users.name, color: users.color, photoUrl: users.photoUrl, createdAt: users.createdAt })
+    .select({
+      id: users.id,
+      email: users.email,
+      name: users.name,
+      color: users.color,
+      photoUrl: users.photoUrl,
+      userType: users.userType,
+      lastActiveAt: users.lastActiveAt,
+      createdAt: users.createdAt,
+    })
     .from(users)
     .where(eq(users.kind, "human"))
     .orderBy(users.createdAt);
   return json({ users: rows });
 });
 
-/** Create a new staff account. */
+/** Create a new staff or volunteer account. */
 export const POST = route(async (req: Request) => {
   await requireAdmin();
-  const input = await body<{ email?: string; name?: string; password?: string; photoUrl?: string }>(req);
+  const input = await body<{ email?: string; name?: string; password?: string; photoUrl?: string; userType?: "staff" | "volunteer" }>(req);
 
   const email = str(input.email, "Email", { max: 200 }).toLowerCase();
   const name = str(input.name, "Name", { max: 80 });
+  const userType = input.userType === "volunteer" ? "volunteer" : "staff";
 
-  if (!email.endsWith("@codingladies.org")) {
-    throw new HttpError(400, "Only @codingladies.org emails are allowed.");
+  if (userType === "staff") {
+    if (!email.endsWith("@codingladies.org")) {
+      throw new HttpError(400, "Only @codingladies.org emails are allowed for staff accounts.");
+    }
+  } else {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new HttpError(400, "Please enter a valid email address.");
+    }
   }
 
   let password = input.password?.trim();
@@ -76,10 +92,11 @@ export const POST = route(async (req: Request) => {
       passwordHash: await hashPassword(password),
       color: pickAvatarColor(email),
       photoUrl,
+      userType,
     })
-    .returning({ id: users.id, email: users.email, name: users.name, photoUrl: users.photoUrl });
+    .returning({ id: users.id, email: users.email, name: users.name, photoUrl: users.photoUrl, userType: users.userType });
 
-  // In internal org use, add new staff member to all existing workspaces and projects
+  // In internal org use, add new user to all existing workspaces and projects
   const allWorkspaces = await db.select({ id: workspaces.id }).from(workspaces);
   if (allWorkspaces.length) {
     await db
@@ -100,14 +117,15 @@ export const POST = route(async (req: Request) => {
   let emailSent = false;
   try {
     const loginUrl = process.env.NEXT_PUBLIC_APP_URL || "https://flow.codingladies.org/login";
+    const roleTitle = userType === "volunteer" ? "Volunteer" : "Staff";
     const mailRes = await emailSender.sendEmail({
       to: email,
       email: email,
-      subject: "Welcome to CLA Flow — Your Staff Account",
+      subject: `Welcome to CLA Flow — Your ${roleTitle} Account`,
       first_name: name.split(" ")[0] || name,
       html: `
         <p>Hello <strong>${name}</strong>,</p>
-        <p>An administrator has created your staff account on <strong>CLA Flow</strong>.</p>
+        <p>An administrator has created your <strong>${roleTitle.toLowerCase()} account</strong> on <strong>CLA Flow</strong>.</p>
         <div style="background: #e6fffa; border: 1px solid #00BFB3; border-radius: 8px; padding: 14px 18px; margin: 18px 0;">
           <p style="margin: 0 0 6px 0; font-size: 13px; color: #044e47;">Your sign-in credentials:</p>
           <p style="margin: 0 0 4px 0; font-size: 13px;"><strong>Email:</strong> ${email}</p>

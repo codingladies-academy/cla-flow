@@ -275,7 +275,15 @@ function PersonMenu({ value, members, onChange }: Props) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [staffList, setStaffList] = useState<
-    { id: string; name: string; email: string; color: string; photoUrl: string | null }[]
+    {
+      id: string;
+      name: string;
+      email: string;
+      color: string;
+      photoUrl: string | null;
+      userType?: "staff" | "volunteer";
+      isOnline?: boolean;
+    }[]
   >([]);
 
   const ref = useDismiss<HTMLDivElement>(() => {
@@ -334,6 +342,16 @@ function PersonMenu({ value, members, onChange }: Props) {
   const otherStaff = staffList.filter(
     (s) =>
       !members.some((m) => m.id === s.id) &&
+      s.userType !== "volunteer" &&
+      (!query ||
+        s.name.toLowerCase().includes(query) ||
+        (s.email && s.email.toLowerCase().includes(query))),
+  );
+
+  const volunteers = staffList.filter(
+    (s) =>
+      !members.some((m) => m.id === s.id) &&
+      s.userType === "volunteer" &&
       (!query ||
         s.name.toLowerCase().includes(query) ||
         (s.email && s.email.toLowerCase().includes(query))),
@@ -388,7 +406,7 @@ function PersonMenu({ value, members, onChange }: Props) {
         <span className={styles.caret}>▾</span>
       </button>
       {open && (
-        <div className={styles.menu} style={{ top: 32, minWidth: 220, maxHeight: 320 }}>
+        <div className={styles.menu} style={{ top: 32, minWidth: 230, maxHeight: 340 }}>
           <input
             className={styles.menuInput}
             autoFocus
@@ -415,8 +433,10 @@ function PersonMenu({ value, members, onChange }: Props) {
               ✓
             </span>
           </button>
+
           {filteredMembers.map((member) => {
             const isSelected = selectedIds.includes(member.id);
+            const isVolunteer = member.userType === "volunteer";
             return (
               <button
                 key={member.id}
@@ -432,6 +452,21 @@ function PersonMenu({ value, members, onChange }: Props) {
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {member.name}
                 </span>
+                {isVolunteer && (
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 600,
+                      color: "#a855f7",
+                      background: "rgba(168, 85, 247, 0.12)",
+                      padding: "1px 4px",
+                      borderRadius: 3,
+                      marginLeft: 4,
+                    }}
+                  >
+                    Volunteer
+                  </span>
+                )}
                 <span style={{ flex: 1 }} />
                 <span
                   className={styles.tick}
@@ -495,7 +530,59 @@ function PersonMenu({ value, members, onChange }: Props) {
             </>
           )}
 
-          {filteredMembers.length === 0 && otherStaff.length === 0 && query && (
+          {volunteers.length > 0 && (
+            <>
+              <div
+                style={{
+                  fontSize: 10,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  color: "#a855f7",
+                  padding: "6px 8px 2px",
+                  fontWeight: 600,
+                  borderTop: "1px solid var(--line-dash, rgba(255,255,255,0.06))",
+                  marginTop: 4,
+                }}
+              >
+                Volunteers
+              </div>
+              {volunteers.map((vol) => {
+                const isSelected = selectedIds.includes(vol.id);
+                return (
+                  <button
+                    key={vol.id}
+                    className={`${styles.menuItem} ${isSelected ? styles.menuItemOn : ""}`}
+                    onClick={() => toggle(vol.id)}
+                    title={`Assign Volunteer ${vol.name}`}
+                  >
+                    <Avatar
+                      name={vol.name}
+                      color={vol.color}
+                      size={18}
+                      photoUrl={vol.photoUrl}
+                    />
+                    <div style={{ display: "flex", flexDirection: "column", overflow: "hidden", textAlign: "left" }}>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {vol.name}
+                      </span>
+                      <span style={{ fontSize: 10, color: "var(--faint, #777)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {vol.email}
+                      </span>
+                    </div>
+                    <span style={{ flex: 1 }} />
+                    <span
+                      className={styles.tick}
+                      style={{ color: isSelected ? "var(--accent)" : "transparent" }}
+                    >
+                      ✓
+                    </span>
+                  </button>
+                );
+              })}
+            </>
+          )}
+
+          {filteredMembers.length === 0 && otherStaff.length === 0 && volunteers.length === 0 && query && (
             <div style={{ padding: "8px 10px", fontSize: 12, color: "var(--faint, #777)", textAlign: "center" }}>
               No people found
             </div>

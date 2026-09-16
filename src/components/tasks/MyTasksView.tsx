@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { MyTaskItemDTO } from "@/lib/queries";
-import { CheckSquareIcon, HashIcon } from "@/components/ui/Icons";
+import { CheckSquareIcon } from "@/components/ui/Icons";
 import styles from "./MyTasksView.module.css";
 
 export function MyTasksView({ tasks }: { tasks: MyTaskItemDTO[] }) {

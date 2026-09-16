@@ -1,6 +1,7 @@
-import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { chatMessages, chatRoomMembers, chatRooms, users, workspaceMembers, workspaces } from "@/db/schema";
+import { emailSender } from "@/lib/emailSender";
 
 export type ChatMessageDTO = {
   id: string;
@@ -30,6 +31,9 @@ export type ChatRoomDTO = {
     email: string;
     color: string;
     photoUrl: string | null;
+    userType?: "staff" | "volunteer";
+    lastActiveAt?: string | null;
+    isOnline?: boolean;
   } | null;
 };
 
@@ -174,7 +178,9 @@ export async function listUserChatRooms(
     if (extraWs) userWorkspaces.push(extraWs);
   }
 
-  // Fetch all staff
+  const now = Date.now();
+
+  // Fetch all staff & volunteers
   const staffRows = await db
     .select({
       id: users.id,
@@ -182,9 +188,12 @@ export async function listUserChatRooms(
       email: users.email,
       color: users.color,
       photoUrl: users.photoUrl,
+      userType: users.userType,
+      lastActiveAt: users.lastActiveAt,
     })
     .from(users)
-    .where(eq(users.kind, "human"));
+    .where(eq(users.kind, "human"))
+    .orderBy(users.name);
 
   // Helper to get unread count and last message for a room
   async function getRoomDetails(roomId: string) {
@@ -269,6 +278,8 @@ export async function listUserChatRooms(
         email: users.email,
         color: users.color,
         photoUrl: users.photoUrl,
+        userType: users.userType,
+        lastActiveAt: users.lastActiveAt,
       })
       .from(chatRoomMembers)
       .innerJoin(users, eq(users.id, chatRoomMembers.userId))
@@ -277,6 +288,10 @@ export async function listUserChatRooms(
 
     if (otherMember) {
       const details = await getRoomDetails(dm.roomId);
+      const isOnline = otherMember.lastActiveAt
+        ? now - new Date(otherMember.lastActiveAt).getTime() < 3 * 60 * 1000
+        : false;
+
       directRooms.push({
         id: dm.roomId,
         kind: "direct",
@@ -289,6 +304,9 @@ export async function listUserChatRooms(
           email: otherMember.email ?? "",
           color: otherMember.color,
           photoUrl: otherMember.photoUrl,
+          userType: (otherMember.userType as "staff" | "volunteer") || "staff",
+          lastActiveAt: otherMember.lastActiveAt ? otherMember.lastActiveAt.toISOString() : null,
+          isOnline,
         },
       });
     }
@@ -304,8 +322,146 @@ export async function listUserChatRooms(
       email: s.email ?? "",
       color: s.color,
       photoUrl: s.photoUrl,
+      userType: (s.userType as "staff" | "volunteer") || "staff",
+      lastActiveAt: s.lastActiveAt ? s.lastActiveAt.toISOString() : null,
+      isOnline: s.lastActiveAt ? now - new Date(s.lastActiveAt).getTime() < 3 * 60 * 1000 : false,
     })),
   };
+}
+
+/**
+ * Send email notification to offline recipients in the background.
+ */
+async function dispatchOfflineChatNotification(
+  roomId: string,
+  senderId: string,
+  senderName: string,
+  content: string,
+) {
+  try {
+    const [room] = await db
+      .select({ id: chatRooms.id, kind: chatRooms.kind, name: chatRooms.name, workspaceId: chatRooms.workspaceId })
+      .from(chatRooms)
+      .where(eq(chatRooms.id, roomId))
+      .limit(1);
+
+    if (!room) return;
+
+    const now = Date.now();
+    const offlineThreshold = new Date(now - 3 * 60 * 1000); // 3 minutes
+    const loginUrl = process.env.NEXT_PUBLIC_APP_URL || "https://flow.codingladies.org/login";
+    const snippetHtml = content
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\n/g, "<br/>");
+
+    if (room.kind === "direct") {
+      const otherMembers = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          lastActiveAt: users.lastActiveAt,
+        })
+        .from(chatRoomMembers)
+        .innerJoin(users, eq(users.id, chatRoomMembers.userId))
+        .where(and(eq(chatRoomMembers.roomId, roomId), sql`${chatRoomMembers.userId} != ${senderId}`));
+
+      for (const recipient of otherMembers) {
+        if (!recipient.email) continue;
+        const isOffline = !recipient.lastActiveAt || new Date(recipient.lastActiveAt).getTime() < offlineThreshold.getTime();
+        if (!isOffline) continue;
+
+        await emailSender.sendEmail({
+          to: recipient.email,
+          email: recipient.email,
+          subject: `[CLA Flow] New direct message from ${senderName}`,
+          first_name: recipient.name.split(" ")[0] || recipient.name,
+          html: `
+            <p>Hello <strong>${recipient.name}</strong>,</p>
+            <p><strong>${senderName}</strong> sent you a direct message on <strong>CLA Flow</strong>:</p>
+            <div style="background: #f0fdfa; border-left: 4px solid #00BFB3; padding: 14px 18px; margin: 18px 0; border-radius: 6px; font-size: 14px; color: #1e293b;">
+              ${snippetHtml}
+            </div>
+            <p style="color: #64748b; font-size: 13px;">You are receiving this email because you are currently offline on CLA Flow.</p>
+            <div style="text-align: center; margin: 24px 0;">
+              <a href="${loginUrl}" class="button" style="background-color: #00BFB3; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: bold; display: inline-block;">Reply on CLA Flow</a>
+            </div>
+          `,
+        });
+      }
+    } else if (room.kind === "workspace" && room.workspaceId) {
+      const wsMembers = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          lastActiveAt: users.lastActiveAt,
+        })
+        .from(workspaceMembers)
+        .innerJoin(users, eq(users.id, workspaceMembers.userId))
+        .where(and(eq(workspaceMembers.workspaceId, room.workspaceId), sql`${workspaceMembers.userId} != ${senderId}`));
+
+      const offlineRecipients = wsMembers
+        .filter((m) => m.email && (!m.lastActiveAt || new Date(m.lastActiveAt).getTime() < offlineThreshold.getTime()))
+        .map((m) => m.email as string);
+
+      if (offlineRecipients.length > 0) {
+        const roomTitle = room.name || "Workspace Chat";
+        await emailSender.sendBulkEmail(
+          offlineRecipients,
+          {
+            subject: `[CLA Flow] ${senderName} in #${roomTitle}`,
+            html: `
+              <p><strong>${senderName}</strong> posted a new message in <strong>#${roomTitle}</strong>:</p>
+              <div style="background: #f0fdfa; border-left: 4px solid #00BFB3; padding: 14px 18px; margin: 18px 0; border-radius: 6px; font-size: 14px; color: #1e293b;">
+                ${snippetHtml}
+              </div>
+              <p style="color: #64748b; font-size: 13px;">You are receiving this notification because you are currently offline.</p>
+              <div style="text-align: center; margin: 24px 0;">
+                <a href="${loginUrl}" class="button" style="background-color: #00BFB3; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: bold; display: inline-block;">Open Workspace Chat</a>
+              </div>
+            `,
+          }
+        );
+      }
+    } else if (room.kind === "global") {
+      const allHumans = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          lastActiveAt: users.lastActiveAt,
+        })
+        .from(users)
+        .where(and(eq(users.kind, "human"), sql`${users.id} != ${senderId}`));
+
+      const offlineRecipients = allHumans
+        .filter((m) => m.email && (!m.lastActiveAt || new Date(m.lastActiveAt).getTime() < offlineThreshold.getTime()))
+        .map((m) => m.email as string);
+
+      if (offlineRecipients.length > 0) {
+        await emailSender.sendBulkEmail(
+          offlineRecipients,
+          {
+            subject: `[CLA Flow] ${senderName} in #All Staff`,
+            html: `
+              <p><strong>${senderName}</strong> posted a new message in <strong>#All Staff (Global)</strong>:</p>
+              <div style="background: #f0fdfa; border-left: 4px solid #00BFB3; padding: 14px 18px; margin: 18px 0; border-radius: 6px; font-size: 14px; color: #1e293b;">
+                ${snippetHtml}
+              </div>
+              <p style="color: #64748b; font-size: 13px;">You are receiving this notification because you are currently offline.</p>
+              <div style="text-align: center; margin: 24px 0;">
+                <a href="${loginUrl}" class="button" style="background-color: #00BFB3; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: bold; display: inline-block;">Open CLA Flow Chat</a>
+              </div>
+            `,
+          }
+        );
+      }
+    }
+  } catch (err) {
+    console.error("Failed to dispatch offline chat notification:", err);
+  }
 }
 
 /**
@@ -373,7 +529,7 @@ export async function sendMessage(
     })
     .returning();
 
-  // Mark room read for the sender
+  // Mark room read and touch lastActiveAt for sender
   await db
     .insert(chatRoomMembers)
     .values({
@@ -386,6 +542,11 @@ export async function sendMessage(
       set: { lastReadAt: new Date() },
     });
 
+  await db
+    .update(users)
+    .set({ lastActiveAt: new Date() })
+    .where(eq(users.id, senderId));
+
   const [sender] = await db
     .select({
       name: users.name,
@@ -396,11 +557,16 @@ export async function sendMessage(
     .where(eq(users.id, senderId))
     .limit(1);
 
+  const senderName = sender?.name ?? "Staff";
+
+  // Asynchronously dispatch offline email notifications without blocking
+  void dispatchOfflineChatNotification(roomId, senderId, senderName, trimmed);
+
   return {
     id: created.id,
     roomId: created.roomId,
     senderId: created.senderId,
-    senderName: sender?.name ?? "Staff",
+    senderName,
     senderColor: sender?.color ?? "#6d5bd0",
     senderPhotoUrl: sender?.photoUrl ?? null,
     content: created.content,

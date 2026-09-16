@@ -8,30 +8,6 @@ const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
 const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY || "";
 const APP_ID = process.env.NEXT_PUBLIC_GOOGLE_APP_ID || "";
 
-const TOKEN_KEY = "cla_flow_gdrive_token";
-const TOKEN_EXP_KEY = "cla_flow_gdrive_token_exp";
-
-function getCachedToken(): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const token = sessionStorage.getItem(TOKEN_KEY);
-    const exp = Number(sessionStorage.getItem(TOKEN_EXP_KEY) || 0);
-    // Ensure token is still valid with a 2-minute safety margin
-    if (token && exp && Date.now() < exp - 120000) {
-      return token;
-    }
-  } catch {}
-  return null;
-}
-
-function setCachedToken(token: string, expiresInSec = 3500) {
-  if (typeof window === "undefined") return;
-  try {
-    sessionStorage.setItem(TOKEN_KEY, token);
-    sessionStorage.setItem(TOKEN_EXP_KEY, String(Date.now() + expiresInSec * 1000));
-  } catch {}
-}
-
 export function GooglePickerButton({
   onFileSelect,
   label = "Drive",
@@ -63,14 +39,13 @@ export function GooglePickerButton({
 
     try {
       setLoading(true);
-      await Promise.all([loadGapiScript(), loadGisScript()]);
+      // Clear any legacy cached tokens so revoked permissions trigger fresh consent
+      try {
+        sessionStorage.removeItem("cla_flow_gdrive_token");
+        sessionStorage.removeItem("cla_flow_gdrive_token_exp");
+      } catch {}
 
-      // Check if we already have an active valid token from a previous sign-in
-      const validToken = getCachedToken();
-      if (validToken) {
-        createPicker(validToken);
-        return;
-      }
+      await Promise.all([loadGapiScript(), loadGisScript()]);
 
       const tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
@@ -83,13 +58,15 @@ export function GooglePickerButton({
             return;
           }
           if (response.access_token) {
-            setCachedToken(response.access_token, response.expires_in || 3500);
             createPicker(response.access_token);
+          } else {
+            setLoading(false);
           }
         },
       });
 
-      tokenClient.requestAccessToken({ prompt: "" });
+      // Request access token - GIS will show the consent dialog if permissions were revoked or missing
+      tokenClient.requestAccessToken();
     } catch (err) {
       console.error("Failed to load Google Picker:", err);
       setLoading(false);
@@ -98,28 +75,54 @@ export function GooglePickerButton({
 
   function createPicker(accessToken: string) {
     try {
-      const docsView = new window.google.picker.DocsView()
+      // Primary view with all files, folders, and shared drives selectable
+      const allFilesView = new window.google.picker.DocsView()
         .setIncludeFolders(true)
-        .setEnableDrives(true); // Shared Drive support
+        .setSelectableMimeTypes(
+          "application/vnd.google-apps.folder,application/vnd.google-apps.shortcut,application/vnd.google-apps.document,application/vnd.google-apps.spreadsheet,application/vnd.google-apps.presentation,application/vnd.google-apps.form,application/vnd.google-apps.site,application/vnd.google-apps.drawing,application/pdf,image/*,video/*,audio/*,text/*,application/*"
+        )
+        .setEnableDrives(true);
+
+      // Shared Drives & Folders navigation view
+      const foldersView = new window.google.picker.DocsView(window.google.picker.ViewId.FOLDERS)
+        .setIncludeFolders(true)
+        .setSelectableMimeTypes(
+          "application/vnd.google-apps.folder,application/vnd.google-apps.shortcut,application/vnd.google-apps.document,application/vnd.google-apps.spreadsheet,application/vnd.google-apps.presentation,application/vnd.google-apps.form,application/pdf,image/*,video/*,audio/*,text/*,application/*"
+        )
+        .setEnableDrives(true);
 
       const uploadView = new window.google.picker.DocsUploadView().setIncludeFolders(true);
 
       const pickerBuilder = new window.google.picker.PickerBuilder()
         .enableFeature(window.google.picker.Feature.SUPPORT_DRIVES)
         .enableFeature(window.google.picker.Feature.SUPPORT_TEAM_DRIVES)
+        .enableFeature(window.google.picker.Feature.MULTISELECT_ENABLED)
         .setOAuthToken(accessToken)
         .setDeveloperKey(API_KEY)
-        .addView(docsView)
+        .addView(allFilesView)
+        .addView(foldersView)
         .addView(uploadView)
         .setCallback((data: any) => {
           if (data.action === window.google.picker.Action.PICKED) {
             setLoading(false);
             if (data.docs && data.docs.length > 0) {
               for (const doc of data.docs) {
+                const name = doc.name || doc[window.google.picker.Document.NAME] || "Google Drive Item";
+                let url = doc.url || doc[window.google.picker.Document.URL];
+                if (!url) {
+                  if (
+                    doc.mimeType === "application/vnd.google-apps.folder" ||
+                    doc.type === "folder"
+                  ) {
+                    url = `https://drive.google.com/drive/folders/${doc.id}`;
+                  } else {
+                    url = `https://drive.google.com/file/d/${doc.id}/view`;
+                  }
+                }
                 onFileSelect({
                   id: doc.id,
-                  name: doc.name,
-                  url: doc.url,
+                  name,
+                  url,
                   mimeType: doc.mimeType,
                 });
               }

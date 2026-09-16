@@ -465,3 +465,75 @@
     display: none;
   }
 }
+
+.avatarWrapper {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.onlineBadge {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  border: 1.5px solid var(--bg-card, #13171f);
+  box-shadow: 0 0 4px rgba(34, 197, 94, 0.6);
+}
+
+.offlineBadge {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #64748b;
+  border: 1.5px solid var(--bg-card, #13171f);
+}
+
+.volunteerTag {
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: #a855f7;
+  background: rgba(168, 85, 247, 0.12);
+  border: 1px solid rgba(168, 85, 247, 0.25);
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: 6px;
+  letter-spacing: 0.02em;
+}
+
+.staffTag {
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: #00bfb3;
+  background: rgba(0, 191, 179, 0.12);
+  border: 1px solid rgba(0, 191, 179, 0.25);
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: 6px;
+  letter-spacing: 0.02em;
+}
+
+.onlineBullet {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  margin-right: 4px;
+}
+
+.offlineBullet {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #64748b;
+  margin-right: 4px;
+}
+

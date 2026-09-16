@@ -15,6 +15,7 @@ type Member = {
   photoUrl: string | null;
   color: string;
   role: string;
+  userType?: "staff" | "volunteer";
 };
 
 type StaffSuggestion = {
@@ -23,6 +24,7 @@ type StaffSuggestion = {
   email: string;
   photoUrl: string | null;
   color: string;
+  userType?: "staff" | "volunteer";
 };
 
 export function WorkspaceSettingsModal({
@@ -317,6 +319,22 @@ export function WorkspaceSettingsModal({
                           <div>
                             <div className={styles.memberName}>
                               {m.name} {m.id === currentUserId && <span className={styles.youBadge}>(You)</span>}
+                              {m.userType === "volunteer" && (
+                                <span
+                                  style={{
+                                    fontSize: 10,
+                                    fontWeight: 600,
+                                    color: "#a855f7",
+                                    background: "rgba(168, 85, 247, 0.12)",
+                                    border: "1px solid rgba(168, 85, 247, 0.25)",
+                                    padding: "1px 5px",
+                                    borderRadius: 4,
+                                    marginLeft: 6,
+                                  }}
+                                >
+                                  Volunteer
+                                </span>
+                              )}
                             </div>
                             <div className={styles.memberEmail}>{m.email}</div>
                           </div>

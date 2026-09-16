@@ -92,6 +92,9 @@ export async function ensureWorkspacesTables() {
       ALTER TABLE "projects" ADD COLUMN IF NOT EXISTS "workspace_id" uuid;
       ALTER TABLE "projects" ADD COLUMN IF NOT EXISTS "is_private" boolean DEFAULT false NOT NULL;
 
+      ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "user_type" text DEFAULT 'staff' NOT NULL;
+      ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "last_active_at" timestamp with time zone;
+
       CREATE UNIQUE INDEX IF NOT EXISTS "workspaces_slug_idx" ON "workspaces" ("slug");
       CREATE INDEX IF NOT EXISTS "workspace_members_user_idx" ON "workspace_members" ("user_id");
     `);
@@ -282,6 +285,8 @@ export async function listWorkspaceMembers(workspaceId: string) {
       email: users.email,
       photoUrl: users.photoUrl,
       color: users.color,
+      userType: users.userType,
+      lastActiveAt: users.lastActiveAt,
       role: workspaceMembers.role,
       createdAt: workspaceMembers.createdAt,
     })
@@ -540,6 +545,8 @@ export async function loadBoard(projectId: string, role: string): Promise<BoardD
         color: users.color,
         photoUrl: users.photoUrl,
         kind: users.kind,
+        userType: users.userType,
+        lastActiveAt: users.lastActiveAt,
         role: projectMembers.role,
       })
       .from(projectMembers)
@@ -631,15 +638,22 @@ export async function loadBoard(projectId: string, role: string): Promise<BoardD
     commentCount: t.commentCount,
   }));
 
-  const members: MemberDTO[] = memberRows.map((m) => ({
-    id: m.id,
-    name: m.name,
-    email: m.email,
-    color: m.color,
-    photoUrl: m.photoUrl ?? null,
-    role: m.role,
-    kind: m.kind === "agent" ? "agent" : "human",
-  }));
+  const now = Date.now();
+  const members: MemberDTO[] = memberRows.map((m) => {
+    const isOnline = m.lastActiveAt ? now - new Date(m.lastActiveAt).getTime() < 3 * 60 * 1000 : false;
+    return {
+      id: m.id,
+      name: m.name,
+      email: m.email,
+      color: m.color,
+      photoUrl: m.photoUrl ?? null,
+      role: m.role,
+      kind: m.kind === "agent" ? "agent" : "human",
+      userType: (m.userType as "staff" | "volunteer") || "staff",
+      lastActiveAt: m.lastActiveAt ? m.lastActiveAt.toISOString() : null,
+      isOnline,
+    };
+  });
 
   return {
     project: {

@@ -1,6 +1,6 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "@/db";
-import { projects, tasks, users, projectMembers, taskValues, properties } from "@/db/schema";
+import { projects, tasks, users, taskValues, properties } from "@/db/schema";
 import { emailSender } from "@/lib/emailSender";
 
 function getAppUrl(): string {

@@ -26,9 +26,13 @@ export const users = pgTable(
     name: text("name").notNull(),
     /** human | agent. An agent is a member like any other, with no password. */
     kind: text("kind").notNull().default("human"),
+    /** staff | volunteer */
+    userType: text("user_type").notNull().default("staff"),
     color: text("color").notNull().default("#6d5bd0"),
     /** Optional profile photo. Any HTTPS URL the user supplies. */
     photoUrl: text("photo_url"),
+    /** Timestamp when user was last active/pinged (for presence) */
+    lastActiveAt: timestamp("last_active_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("users_email_key").on(t.email)],

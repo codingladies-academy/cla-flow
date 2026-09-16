@@ -67,6 +67,9 @@ export type MemberDTO = {
   photoUrl?: string | null;
   role: string;
   kind: "human" | "agent";
+  userType?: "staff" | "volunteer";
+  lastActiveAt?: string | null;
+  isOnline?: boolean;
 };
 
 export type TaskValue = string | string[] | number | boolean | null;

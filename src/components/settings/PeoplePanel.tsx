@@ -257,6 +257,22 @@ function MemberRow({
       />
       <span className={styles.memberName}>{member.name}</span>
       <span className={styles.memberMail}>{member.email}</span>
+      {member.userType === "volunteer" && (
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 600,
+            color: "#a855f7",
+            background: "rgba(168, 85, 247, 0.12)",
+            border: "1px solid rgba(168, 85, 247, 0.25)",
+            padding: "1px 5px",
+            borderRadius: 4,
+            marginLeft: 4,
+          }}
+        >
+          Volunteer
+        </span>
+      )}
       {member.role === "owner" && <Tag accent>owner</Tag>}
       <Spacer />
       {canRemove && (

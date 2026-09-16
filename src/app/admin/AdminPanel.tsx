@@ -12,6 +12,8 @@ type UserRow = {
   name: string;
   color: string;
   photoUrl: string | null;
+  userType: "staff" | "volunteer";
+  lastActiveAt?: string | null;
   createdAt: string;
 };
 
@@ -27,7 +29,11 @@ export function AdminPanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Filter tab state: "all" | "staff" | "volunteer"
+  const [filterTab, setFilterTab] = useState<"all" | "staff" | "volunteer">("all");
+
   // Create form state
+  const [userType, setUserType] = useState<"staff" | "volunteer">("staff");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -37,6 +43,7 @@ export function AdminPanel({
   const [createdInfo, setCreatedInfo] = useState<{
     email: string;
     password: string;
+    userType: "staff" | "volunteer";
     emailSent: boolean;
   } | null>(null);
   const [createdCopied, setCreatedCopied] = useState(false);
@@ -87,7 +94,7 @@ export function AdminPanel({
     setCreatedInfo(null);
     try {
       const res = await api.post<{
-        user: { id: string; email: string; name: string };
+        user: { id: string; email: string; name: string; userType: "staff" | "volunteer" };
         password: string;
         emailSent: boolean;
       }>("/api/admin/users", {
@@ -95,10 +102,12 @@ export function AdminPanel({
         email,
         password: password.trim() || undefined,
         photoUrl: photoUrl.trim() || undefined,
+        userType,
       });
       setCreatedInfo({
         email: res.user.email,
         password: res.password,
+        userType: res.user.userType || userType,
         emailSent: res.emailSent,
       });
       setName("");
@@ -110,6 +119,21 @@ export function AdminPanel({
       setCreateError(err instanceof Error ? err.message : "Could not create account.");
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function toggleUserType(userId: string, currentType: "staff" | "volunteer") {
+    const nextType = currentType === "volunteer" ? "staff" : "volunteer";
+    try {
+      const res = await api.patch<{ user: UserRow }>(`/api/admin/users/${userId}`, {
+        userType: nextType,
+      });
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, userType: res.user.userType } : u)),
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not update user type.");
+      void load();
     }
   }
 
@@ -182,11 +206,30 @@ export function AdminPanel({
       </div>
 
       <div className={styles.body}>
-        <h1 className={styles.h1}>Staff accounts</h1>
+        <h1 className={styles.h1}>Staff & Volunteer Accounts</h1>
 
         {/* Create form */}
         <section className={styles.card}>
-          <h2 className={styles.h2}>Create account</h2>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <h2 className={styles.h2} style={{ margin: 0 }}>Create Account</h2>
+            <div className={styles.typeSelectGroup}>
+              <button
+                type="button"
+                className={`${styles.typeSelectBtn} ${userType === "staff" ? styles.typeSelectBtnActive : ""}`}
+                onClick={() => setUserType("staff")}
+              >
+                Staff
+              </button>
+              <button
+                type="button"
+                className={`${styles.typeSelectBtn} ${userType === "volunteer" ? styles.typeSelectBtnActive : ""}`}
+                onClick={() => setUserType("volunteer")}
+              >
+                Volunteer
+              </button>
+            </div>
+          </div>
+
           <form className={styles.form} onSubmit={createUser}>
             <div className={styles.row}>
               <input
@@ -199,7 +242,7 @@ export function AdminPanel({
               <input
                 className={styles.input}
                 type="email"
-                placeholder="name@codingladies.org"
+                placeholder={userType === "staff" ? "name@codingladies.org" : "volunteer@gmail.com (personal email)"}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -241,7 +284,7 @@ export function AdminPanel({
                 onChange={(e) => setPhotoUrl(e.target.value)}
               />
               <button className={styles.createBtn} type="submit" disabled={creating}>
-                {creating ? "Creating…" : "Create"}
+                {creating ? "Creating…" : `Create ${userType === "volunteer" ? "Volunteer" : "Staff"}`}
               </button>
             </div>
             {createError && <p className={styles.err}>{createError}</p>}
@@ -249,7 +292,7 @@ export function AdminPanel({
               <div className={styles.createdBanner}>
                 <div className={styles.createdHeader}>
                   <span>
-                    ✓ Account created for <strong>{createdInfo.email}</strong>!
+                    ✓ {createdInfo.userType === "volunteer" ? "Volunteer" : "Staff"} account created for <strong>{createdInfo.email}</strong>!
                   </span>
                   {createdInfo.emailSent ? (
                     <span style={{ color: "#3fb0c8", fontSize: 12 }}>
@@ -278,98 +321,166 @@ export function AdminPanel({
 
         {/* Users table */}
         <section className={styles.card}>
-          <h2 className={styles.h2}>{users.length} {users.length === 1 ? "member" : "members"}</h2>
-          {loading ? (
-            <p className={styles.muted}>Loading…</p>
-          ) : error ? (
-            <p className={styles.err}>{error}</p>
-          ) : (
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Photo URL</th>
-                  <th>Joined</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => (
-                  <tr key={u.id}>
-                    <td>
-                      <div className={styles.nameCell}>
-                        {u.photoUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={u.photoUrl}
-                            alt={u.name}
-                            className={styles.avatar}
-                          />
-                        ) : (
-                          <span
-                            className={styles.avatar}
-                            style={{ background: u.color }}
-                          >
-                            {u.name.slice(0, 1).toUpperCase()}
-                          </span>
-                        )}
-                        {u.name}
-                      </div>
-                    </td>
-                    <td className={styles.muted}>{u.email}</td>
-                    <td>
-                      <input
-                        className={styles.tablePhotoInput}
-                        key={u.photoUrl ?? "none"}
-                        defaultValue={u.photoUrl ?? ""}
-                        placeholder="Add photo URL…"
-                        title="Edit photo URL (saves on blur)"
-                        onBlur={(e) => {
-                          const val = e.target.value;
-                          if (val !== (u.photoUrl ?? "")) {
-                            void updatePhotoUrl(u.id, val);
-                          }
-                        }}
-                      />
-                    </td>
-                    <td className={styles.muted}>
-                      {new Date(u.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className={styles.actions}>
-                      <button
-                        className={styles.resetBtn}
-                        type="button"
-                        onClick={() => {
-                          setResetUser(u);
-                          setCustomPassword("");
-                          setSendEmail(true);
-                          setResetResult(null);
-                          setResetError(null);
-                          setCopied(false);
-                        }}
-                      >
-                        Reset password
-                      </button>
-                      {u.id === currentUserId ? (
-                        <span className={styles.youBadge} title="You cannot delete yourself">
-                          You
-                        </span>
-                      ) : (
-                        <button
-                          className={styles.deleteBtn}
-                          type="button"
-                          onClick={() => deleteUser(u.id, u.name)}
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          {(() => {
+            const staffCount = users.filter((u) => u.userType !== "volunteer").length;
+            const volunteerCount = users.filter((u) => u.userType === "volunteer").length;
+            const filteredUsers =
+              filterTab === "staff"
+                ? users.filter((u) => u.userType !== "volunteer")
+                : filterTab === "volunteer"
+                ? users.filter((u) => u.userType === "volunteer")
+                : users;
+            const now = Date.now();
+
+            return (
+              <>
+                <div className={styles.tabsRow}>
+                  <h2 className={styles.h2} style={{ margin: 0 }}>
+                    {filteredUsers.length} {filteredUsers.length === 1 ? "member" : "members"}
+                  </h2>
+                  <div className={styles.tabList}>
+                    <button
+                      type="button"
+                      className={`${styles.tabBtn} ${filterTab === "all" ? styles.tabBtnActive : ""}`}
+                      onClick={() => setFilterTab("all")}
+                    >
+                      All ({users.length})
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.tabBtn} ${filterTab === "staff" ? styles.tabBtnActive : ""}`}
+                      onClick={() => setFilterTab("staff")}
+                    >
+                      Staff ({staffCount})
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.tabBtn} ${filterTab === "volunteer" ? styles.tabBtnActive : ""}`}
+                      onClick={() => setFilterTab("volunteer")}
+                    >
+                      Volunteers ({volunteerCount})
+                    </button>
+                  </div>
+                </div>
+
+                {loading ? (
+                  <p className={styles.muted}>Loading…</p>
+                ) : error ? (
+                  <p className={styles.err}>{error}</p>
+                ) : (
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Email</th>
+                        <th>Photo URL</th>
+                        <th>Joined</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredUsers.map((u) => {
+                        const isOnline = u.lastActiveAt
+                          ? now - new Date(u.lastActiveAt).getTime() < 3 * 60 * 1000
+                          : false;
+                        const isVolunteer = u.userType === "volunteer";
+
+                        return (
+                          <tr key={u.id}>
+                            <td>
+                              <div className={styles.nameCell}>
+                                {u.photoUrl ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={u.photoUrl}
+                                    alt={u.name}
+                                    className={styles.avatar}
+                                  />
+                                ) : (
+                                  <span
+                                    className={styles.avatar}
+                                    style={{ background: u.color }}
+                                  >
+                                    {u.name.slice(0, 1).toUpperCase()}
+                                  </span>
+                                )}
+                                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  <span
+                                    className={isOnline ? styles.onlineIndicator : styles.offlineIndicator}
+                                    title={isOnline ? "Online now" : "Offline"}
+                                  />
+                                  {u.name}
+                                </span>
+                              </div>
+                            </td>
+                            <td>
+                              <button
+                                type="button"
+                                className={isVolunteer ? styles.badgeVolunteer : styles.badgeStaff}
+                                title="Click to switch role (Staff / Volunteer)"
+                                onClick={() => toggleUserType(u.id, u.userType)}
+                              >
+                                {isVolunteer ? "Volunteer" : "Staff"} ▾
+                              </button>
+                            </td>
+                            <td className={styles.muted}>{u.email}</td>
+                            <td>
+                              <input
+                                className={styles.tablePhotoInput}
+                                key={u.photoUrl ?? "none"}
+                                defaultValue={u.photoUrl ?? ""}
+                                placeholder="Add photo URL…"
+                                title="Edit photo URL (saves on blur)"
+                                onBlur={(e) => {
+                                  const val = e.target.value;
+                                  if (val !== (u.photoUrl ?? "")) {
+                                    void updatePhotoUrl(u.id, val);
+                                  }
+                                }}
+                              />
+                            </td>
+                            <td className={styles.muted}>
+                              {new Date(u.createdAt).toLocaleDateString()}
+                            </td>
+                            <td className={styles.actions}>
+                              <button
+                                className={styles.resetBtn}
+                                type="button"
+                                onClick={() => {
+                                  setResetUser(u);
+                                  setCustomPassword("");
+                                  setSendEmail(true);
+                                  setResetResult(null);
+                                  setResetError(null);
+                                  setCopied(false);
+                                }}
+                              >
+                                Reset password
+                              </button>
+                              {u.id === currentUserId ? (
+                                <span className={styles.youBadge} title="You cannot delete yourself">
+                                  You
+                                </span>
+                              ) : (
+                                <button
+                                  className={styles.deleteBtn}
+                                  type="button"
+                                  onClick={() => deleteUser(u.id, u.name)}
+                                >
+                                  Remove
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </>
+            );
+          })()}
         </section>
       </div>
 

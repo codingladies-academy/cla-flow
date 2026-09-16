@@ -37,11 +37,21 @@ export function ChatPanel({
       email: string;
       color: string;
       photoUrl: string | null;
+      userType?: "staff" | "volunteer";
+      lastActiveAt?: string | null;
+      isOnline?: boolean;
     }>
   >([]);
 
   const [activeRoomId, setActiveRoomId] = useState<string>("");
   const [activeRoomTitle, setActiveRoomTitle] = useState<string>("All Staff");
+  const [activeOtherUser, setActiveOtherUser] = useState<{
+    id: string;
+    name: string;
+    email: string;
+    isOnline?: boolean;
+    userType?: "staff" | "volunteer";
+  } | null>(null);
   const [messages, setMessages] = useState<ChatMessageDTO[]>([]);
   const [inputText, setInputText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -52,6 +62,16 @@ export function ChatPanel({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const lastMessageIdRef = useRef<string>("");
+
+  // Presence heartbeat when chat is active
+  useEffect(() => {
+    if (!open) return;
+    void api.post("/api/presence", {}).catch(() => {});
+    const pTimer = setInterval(() => {
+      void api.post("/api/presence", {}).catch(() => {});
+    }, 30000);
+    return () => clearInterval(pTimer);
+  }, [open]);
 
   // Request browser desktop notification permission on user interaction
   useEffect(() => {
@@ -78,6 +98,9 @@ export function ChatPanel({
           email: string;
           color: string;
           photoUrl: string | null;
+          userType?: "staff" | "volunteer";
+          lastActiveAt?: string | null;
+          isOnline?: boolean;
         }>;
       }>(url);
 
@@ -95,6 +118,7 @@ export function ChatPanel({
       if (!activeRoomId && res.globalRoom) {
         setActiveRoomId(res.globalRoom.id);
         setActiveRoomTitle("All Staff");
+        setActiveOtherUser(null);
       }
     } catch (err) {
       console.error("Failed to load chat rooms:", err);
@@ -161,7 +185,7 @@ export function ChatPanel({
     }
   }, [messages, open]);
 
-  // Start or open a DM with a staff member
+  // Start or open a DM with a staff member or volunteer
   async function handleOpenDirectMessage(targetStaffId: string, staffName: string) {
     if (targetStaffId === user.id) return;
     try {
@@ -170,6 +194,18 @@ export function ChatPanel({
       });
       setActiveRoomId(res.roomId);
       setActiveRoomTitle(staffName);
+      const targetUser = allStaff.find((s) => s.id === targetStaffId);
+      setActiveOtherUser(
+        targetUser
+          ? {
+              id: targetUser.id,
+              name: targetUser.name,
+              email: targetUser.email,
+              isOnline: targetUser.isOnline,
+              userType: targetUser.userType,
+            }
+          : null,
+      );
       await loadRooms();
       await loadMessages(res.roomId);
     } catch (err) {
@@ -214,6 +250,9 @@ export function ChatPanel({
         s.email.toLowerCase().includes(searchQuery.toLowerCase())),
   );
 
+  const staffSection = filteredStaff.filter((s) => s.userType !== "volunteer");
+  const volunteerSection = filteredStaff.filter((s) => s.userType === "volunteer");
+
   return (
     <div className={styles.overlay} onClick={onClose}>
       <div
@@ -224,7 +263,7 @@ export function ChatPanel({
         <div className={styles.channelList}>
           <div className={styles.channelHeader}>
             <div className={styles.channelTitle}>
-              <span>Staff Chat</span>
+              <span>Staff & Volunteer Chat</span>
               <button
                 type="button"
                 className={styles.closeBtn}
@@ -238,7 +277,7 @@ export function ChatPanel({
             <input
               type="text"
               className={styles.staffSearch}
-              placeholder="Search staff to chat..."
+              placeholder="Search people to chat..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -254,6 +293,7 @@ export function ChatPanel({
                 onClick={() => {
                   setActiveRoomId(globalRoom.id);
                   setActiveRoomTitle("All Staff");
+                  setActiveOtherUser(null);
                   setMobileView("chat");
                 }}
               >
@@ -282,6 +322,7 @@ export function ChatPanel({
                 onClick={() => {
                   setActiveRoomId(wsRoom.id);
                   setActiveRoomTitle(wsRoom.name);
+                  setActiveOtherUser(null);
                   setMobileView("chat");
                 }}
               >
@@ -311,6 +352,7 @@ export function ChatPanel({
             {!searchQuery &&
               directRooms.map((dm) => {
                 const isActive = activeRoomId === dm.id;
+                const isVolunteer = dm.otherUser?.userType === "volunteer";
                 return (
                   <button
                     key={dm.id}
@@ -319,18 +361,35 @@ export function ChatPanel({
                     onClick={() => {
                       setActiveRoomId(dm.id);
                       setActiveRoomTitle(dm.name);
+                      setActiveOtherUser(
+                        dm.otherUser
+                          ? {
+                              id: dm.otherUser.id,
+                              name: dm.otherUser.name,
+                              email: dm.otherUser.email,
+                              isOnline: dm.otherUser.isOnline,
+                              userType: dm.otherUser.userType,
+                            }
+                          : null,
+                      );
                       setMobileView("chat");
                     }}
                   >
-                    <Avatar
-                      name={dm.name}
-                      color={dm.otherUser?.color ?? "#4285f4"}
-                      size={26}
-                      photoUrl={dm.otherUser?.photoUrl}
-                    />
+                    <div className={styles.avatarWrapper}>
+                      <Avatar
+                        name={dm.name}
+                        color={dm.otherUser?.color ?? "#4285f4"}
+                        size={26}
+                        photoUrl={dm.otherUser?.photoUrl}
+                      />
+                      <span className={dm.otherUser?.isOnline ? styles.onlineBadge : styles.offlineBadge} />
+                    </div>
                     <div className={styles.roomInfo}>
                       <div className={styles.roomNameRow}>
-                        <span className={styles.roomName}>{dm.name}</span>
+                        <span className={styles.roomName}>
+                          {dm.name}
+                          {isVolunteer && <span className={styles.volunteerTag}>Volunteer</span>}
+                        </span>
                         {dm.unreadCount > 0 && (
                           <span className={styles.unreadBadge}>{dm.unreadCount}</span>
                         )}
@@ -343,31 +402,77 @@ export function ChatPanel({
                 );
               })}
 
-            {/* Staff list for new DM */}
+            {/* People list for new DM */}
             {(searchQuery || directRooms.length === 0) && (
               <div>
-                {filteredStaff.map((staff) => (
-                  <button
-                    key={staff.id}
-                    type="button"
-                    className={styles.roomBtn}
-                    onClick={() => {
-                      handleOpenDirectMessage(staff.id, staff.name);
-                      setMobileView("chat");
-                    }}
-                  >
-                    <Avatar
-                      name={staff.name}
-                      color={staff.color}
-                      size={24}
-                      photoUrl={staff.photoUrl}
-                    />
-                    <div className={styles.roomInfo}>
-                      <span className={styles.roomName}>{staff.name}</span>
-                      <div className={styles.roomSnippet}>{staff.email}</div>
+                {staffSection.length > 0 && (
+                  <>
+                    <div className={styles.sectionLabel} style={{ marginTop: 8 }}>
+                      Staff ({staffSection.length})
                     </div>
-                  </button>
-                ))}
+                    {staffSection.map((staff) => (
+                      <button
+                        key={staff.id}
+                        type="button"
+                        className={styles.roomBtn}
+                        onClick={() => {
+                          handleOpenDirectMessage(staff.id, staff.name);
+                          setMobileView("chat");
+                        }}
+                      >
+                        <div className={styles.avatarWrapper}>
+                          <Avatar
+                            name={staff.name}
+                            color={staff.color}
+                            size={24}
+                            photoUrl={staff.photoUrl}
+                          />
+                          <span className={staff.isOnline ? styles.onlineBadge : styles.offlineBadge} />
+                        </div>
+                        <div className={styles.roomInfo}>
+                          <span className={styles.roomName}>{staff.name}</span>
+                          <div className={styles.roomSnippet}>{staff.email}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </>
+                )}
+
+                {volunteerSection.length > 0 && (
+                  <>
+                    <div className={styles.sectionLabel} style={{ marginTop: 12, color: "#a855f7" }}>
+                      Volunteers ({volunteerSection.length})
+                    </div>
+                    {volunteerSection.map((vol) => (
+                      <button
+                        key={vol.id}
+                        type="button"
+                        className={styles.roomBtn}
+                        onClick={() => {
+                          handleOpenDirectMessage(vol.id, vol.name);
+                          setMobileView("chat");
+                        }}
+                      >
+                        <div className={styles.avatarWrapper}>
+                          <Avatar
+                            name={vol.name}
+                            color={vol.color}
+                            size={24}
+                            photoUrl={vol.photoUrl}
+                          />
+                          <span className={vol.isOnline ? styles.onlineBadge : styles.offlineBadge} />
+                        </div>
+                        <div className={styles.roomInfo}>
+                          <span className={styles.roomName}>
+                            {vol.name}
+                            <span className={styles.volunteerTag}>Volunteer</span>
+                          </span>
+                          <div className={styles.roomSnippet}>{vol.email}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -387,13 +492,30 @@ export function ChatPanel({
                 ← Channels
               </button>
               <div className={styles.headerInfo}>
-                <span className={styles.headerTitle}>{activeRoomTitle}</span>
+                <span className={styles.headerTitle}>
+                  {activeRoomTitle}
+                  {activeOtherUser?.userType === "volunteer" && (
+                    <span className={styles.volunteerTag}>Volunteer</span>
+                  )}
+                </span>
                 <span className={styles.headerSub}>
-                  {activeRoomTitle === "All Staff"
-                    ? "Organization-wide"
-                    : activeRoomTitle.includes("Workspace")
-                      ? "Workspace discussion"
-                      : "Direct message"}
+                  {activeOtherUser ? (
+                    activeOtherUser.isOnline ? (
+                      <span style={{ display: "inline-flex", alignItems: "center" }}>
+                        <span className={styles.onlineBullet} /> Online now
+                      </span>
+                    ) : (
+                      <span style={{ display: "inline-flex", alignItems: "center" }}>
+                        <span className={styles.offlineBullet} /> Offline
+                      </span>
+                    )
+                  ) : activeRoomTitle === "All Staff" ? (
+                    "Organization-wide channel"
+                  ) : activeRoomTitle.includes("Workspace") ? (
+                    "Workspace discussion"
+                  ) : (
+                    "Chat"
+                  )}
                 </span>
               </div>
             </div>
