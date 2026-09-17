@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/client";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Form";
@@ -19,24 +19,174 @@ export function AuthForm({ mode, signupOpen = true }: { mode: Mode; signupOpen?:
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // 2FA Challenge state
+  const [challengeId, setChallengeId] = useState<string | null>(null);
+  const [twoFactorCode, setTwoFactorCode] = useState("");
+
+  const googleBtnRef = useRef<HTMLDivElement>(null);
   const register = mode === "register";
+
+  // Initialize Google Sign-In button if script is loaded
+  useEffect(() => {
+    if (challengeId) return;
+
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (!clientId) return;
+
+    function initGoogle() {
+      const google = (window as any).google;
+      if (!google?.accounts?.id || !googleBtnRef.current) return;
+
+      try {
+        google.accounts.id.initialize({
+          client_id: clientId,
+          callback: async (response: any) => {
+            if (!response.credential) return;
+            setBusy(true);
+            setError(null);
+            try {
+              const res = await api.post<{ requires2FA?: boolean; challengeId?: string }>("/api/auth/google", {
+                credential: response.credential,
+              });
+              if (res.requires2FA && res.challengeId) {
+                setChallengeId(res.challengeId);
+                setBusy(false);
+                return;
+              }
+              router.replace("/projects");
+              router.refresh();
+            } catch (err: any) {
+              setError(err instanceof Error ? err.message : "Google sign-in failed.");
+              setBusy(false);
+            }
+          },
+        });
+
+        google.accounts.id.renderButton(googleBtnRef.current, {
+          theme: "outline",
+          size: "large",
+          width: 308,
+          text: register ? "signup_with" : "signin_with",
+          shape: "rectangular",
+        });
+      } catch (e) {
+        console.error("Google button init error:", e);
+      }
+    }
+
+    if ((window as any).google) {
+      initGoogle();
+    } else {
+      const script = document.createElement("script");
+      script.src = "https://accounts.google.com/gsi/client";
+      script.async = true;
+      script.defer = true;
+      script.onload = initGoogle;
+      document.body.appendChild(script);
+    }
+  }, [challengeId, register, router]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      await api.post(register ? "/api/auth/register" : "/api/auth/login", {
-        name,
-        email,
-        password,
-      });
+      const res = await api.post<{ requires2FA?: boolean; challengeId?: string }>(
+        register ? "/api/auth/register" : "/api/auth/login",
+        {
+          name,
+          email,
+          password,
+        }
+      );
+
+      if (res.requires2FA && res.challengeId) {
+        setChallengeId(res.challengeId);
+        setBusy(false);
+        return;
+      }
+
       router.replace("/projects");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
       setBusy(false);
     }
+  }
+
+  async function submit2FA(event: React.FormEvent) {
+    event.preventDefault();
+    if (!challengeId || !twoFactorCode.trim()) return;
+
+    setBusy(true);
+    setError(null);
+
+    try {
+      await api.post("/api/auth/2fa/verify", {
+        challengeId,
+        code: twoFactorCode.trim(),
+      });
+      router.replace("/projects");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Invalid code. Please try again.");
+      setBusy(false);
+    }
+  }
+
+  // 2FA Verification Screen
+  if (challengeId) {
+    return (
+      <div className={styles.wrap}>
+        <div className={styles.card}>
+          <Brand />
+          <h1 className={styles.h1}>Two-Factor Authentication</h1>
+          <p className={styles.tagline}>
+            Enter the 6-digit code from your Authenticator app (or an emergency backup code).
+          </p>
+
+          <form className={styles.form} onSubmit={submit2FA}>
+            <div className={styles.field}>
+              <span className="label">Verification Code</span>
+              <Input
+                size="lg"
+                block
+                autoFocus
+                type="text"
+                value={twoFactorCode}
+                aria-label="6-digit code"
+                onChange={(e) => setTwoFactorCode(e.target.value)}
+                placeholder="123456"
+                autoComplete="one-time-code"
+                required
+              />
+            </div>
+
+            {error && (
+              <div className={styles.error} role="alert">
+                {error}
+              </div>
+            )}
+
+            <Button size="lg" block type="submit" disabled={busy || !twoFactorCode.trim()} className={styles.submit}>
+              {busy ? "Verifying…" : "Verify & Sign In"}
+            </Button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setChallengeId(null);
+                setTwoFactorCode("");
+                setError(null);
+              }}
+              className={styles.cancelLink}
+            >
+              Back to login
+            </button>
+          </form>
+        </div>
+      </div>
+    );
   }
 
   if (register && !signupOpen) {
@@ -149,6 +299,15 @@ export function AuthForm({ mode, signupOpen = true }: { mode: Mode; signupOpen?:
             {busy ? "One moment…" : register ? "Create account" : "Sign in"}
           </Button>
         </form>
+
+        {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
+          <div className={styles.googleSection}>
+            <div className={styles.divider}>
+              <span>or</span>
+            </div>
+            <div ref={googleBtnRef} className={styles.googleBtnContainer} />
+          </div>
+        )}
 
         <div className={styles.switch}>
           {register ? (

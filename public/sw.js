@@ -60,3 +60,51 @@ self.addEventListener("fetch", (event) => {
     })
   );
 });
+
+// Push notification handling
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+
+  try {
+    const payload = event.data.json();
+    const title = payload.title || "CLA Flow Notification";
+    const options = {
+      body: payload.body || "",
+      icon: payload.icon || "/icon.svg",
+      badge: payload.badge || "/icon.svg",
+      data: {
+        url: payload.url || "/",
+      },
+      vibrate: [100, 50, 100],
+    };
+
+    event.waitUntil(self.registration.showNotification(title, options));
+  } catch (err) {
+    console.error("Error processing push event:", err);
+  }
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  const targetUrl = event.notification.data?.url || "/";
+
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
+      // If a window is already open, focus it and navigate
+      for (const client of windowClients) {
+        if ("focus" in client) {
+          client.focus();
+          if (client.url !== targetUrl) {
+            client.navigate(targetUrl);
+          }
+          return;
+        }
+      }
+      // Otherwise open a new window
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
+  );
+});

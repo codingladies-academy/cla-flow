@@ -360,6 +360,88 @@ export function ProjectPanel() {
         )}
       </Card>
 
+      <div style={{ marginTop: 28 }}>
+        <PageHead
+          title="Google Integrations & Data Export"
+          note="Connect your project data to Google Sheets, Looker Studio, and Google Calendar."
+        />
+      </div>
+
+      <Card>
+        <Row className={styles.stack}>
+          <Field
+            label="Google Sheets & CSV Export"
+            note="Download all tasks and custom properties as a CSV spreadsheet compatible with Google Sheets & Excel."
+          >
+            <div style={{ marginTop: 6 }}>
+              <a
+                href={`/api/projects/${data.project.id}/export?format=csv`}
+                download
+                style={{ textDecoration: "none" }}
+              >
+                <Button variant="primary">Export to CSV / Google Sheets</Button>
+              </a>
+            </div>
+          </Field>
+        </Row>
+
+        <Row className={styles.stack}>
+          <Field
+            label="Looker Studio & Live Feed Endpoint"
+            note="Live JSON feed URL for Looker Studio dashboards, automated reporting, or Google Sheets =IMPORTDATA()."
+          >
+            <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "center" }}>
+              <Input
+                size="lg"
+                block
+                readOnly
+                value={typeof window !== "undefined" ? `${window.location.origin}/api/projects/${data.project.id}/export?format=json` : ""}
+                aria-label="Looker Studio feed URL"
+              />
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  if (typeof window !== "undefined") {
+                    navigator.clipboard.writeText(`${window.location.origin}/api/projects/${data.project.id}/export?format=json`);
+                    notify("Looker Studio feed URL copied to clipboard.");
+                  }
+                }}
+              >
+                Copy URL
+              </Button>
+            </div>
+          </Field>
+        </Row>
+
+        <Row className={styles.stack}>
+          <Field
+            label="Project Google Calendar Feed (.ics)"
+            note="Subscribe in Google Calendar to automatically view and sync all project task deadlines."
+          >
+            <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "center" }}>
+              <Input
+                size="lg"
+                block
+                readOnly
+                value={typeof window !== "undefined" ? `${window.location.origin}/api/calendar/project/${data.project.id}` : ""}
+                aria-label="Project Calendar feed URL"
+              />
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  if (typeof window !== "undefined") {
+                    navigator.clipboard.writeText(`${window.location.origin}/api/calendar/project/${data.project.id}`);
+                    notify("Project Calendar feed URL copied to clipboard.");
+                  }
+                }}
+              >
+                Copy URL
+              </Button>
+            </div>
+          </Field>
+        </Row>
+      </Card>
+
       {isOwner && (
         <div className={styles.danger}>
           <span className={styles.dangerHead}>Delete this project</span>

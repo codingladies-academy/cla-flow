@@ -29,6 +29,9 @@ import { useNow } from "@/components/ui/useElapsed";
 import { useDismiss } from "@/components/ui/useDismiss";
 import { GooglePickerButton } from "@/components/drive/GooglePickerButton";
 import { GoogleDriveCardList } from "@/components/drive/GoogleDriveCard";
+import { VoiceDictationButton } from "@/components/ui/VoiceDictationButton";
+import { AiTaskActions } from "@/components/task/AiTaskActions";
+import { createGoogleCalendarUrl } from "@/lib/calendar";
 import { PropertyControl } from "./controls/PropertyControl";
 import { isTyping } from "./keys";
 import { Markdown } from "./Markdown";
@@ -246,6 +249,7 @@ export function TaskPanel({ taskId, onClose }: { taskId: string; onClose: () => 
             {boardTask.key}
           </button>
           <span style={{ flex: 1 }} />
+          <AiTaskActions taskId={taskId} />
           <button
             className={styles.iconButton}
             aria-label="Task menu"
@@ -274,6 +278,30 @@ export function TaskPanel({ taskId, onClose }: { taskId: string; onClose: () => 
                 <span className={styles.menuDot} />
                 Copy link
               </button>
+              {(() => {
+                const dateProp = data.properties.find((p) => p.type === "date");
+                const dateVal = dateProp ? boardTask.values[dateProp.id] : null;
+                const calUrl = createGoogleCalendarUrl({
+                  title: `[${boardTask.key}] ${boardTask.title}`,
+                  description: boardTask.description,
+                  url: typeof window !== "undefined" ? window.location.href : undefined,
+                  startDate: dateVal ? String(dateVal) : new Date(),
+                  allDay: true,
+                });
+                return (
+                  <a
+                    href={calUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={styles.menuItem}
+                    onClick={() => setMenuOpen(false)}
+                    style={{ textDecoration: "none" }}
+                  >
+                    <span className={styles.menuDot} />
+                    Add to Google Calendar
+                  </a>
+                );
+              })()}
               <button
                 className={`${styles.menuItem} ${styles.menuItemDanger}`}
                 onClick={() => {
@@ -653,6 +681,15 @@ function Description({ value, onCommit }: { value: string; onCommit: (v: string)
       <div className={styles.blockHead}>
         <span className="label">Description</span>
         <span style={{ flex: 1 }} />
+        <VoiceDictationButton
+          size="sm"
+          onTranscript={(spoken) => {
+            const current = editing ? draft : value;
+            const updated = current.trim() ? `${current.trim()} ${spoken}` : spoken;
+            setDraft(updated);
+            onCommit(updated);
+          }}
+        />
         <GooglePickerButton
           onFileSelect={(item) => {
             const link = `[${item.name}](${item.url})`;
@@ -970,12 +1007,18 @@ function Comments({
             }}
           />
           <div className={styles.composerFoot}>
+            <VoiceDictationButton
+              size="sm"
+              onTranscript={(spoken) => {
+                setDraft((prev) => (prev.trim() ? `${prev.trim()} ${spoken}` : spoken));
+              }}
+            />
             <GooglePickerButton
               onFileSelect={(item) => {
                 const link = `[${item.name}](${item.url})`;
                 setDraft((prev) => (prev ? `${prev}\n${link}` : link));
               }}
-              label="Attach Drive"
+              label="Drive"
             />
             <span style={{ fontSize: 10.5, color: "var(--faint-3)" }}>Cmd + Enter to send</span>
             <span style={{ flex: 1 }} />

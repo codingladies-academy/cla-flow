@@ -2,6 +2,7 @@ import { eq, and } from "drizzle-orm";
 import { db } from "@/db";
 import { projects, tasks, users, taskValues, properties } from "@/db/schema";
 import { emailSender } from "@/lib/emailSender";
+import { sendPushToUser } from "@/lib/push-server";
 
 function getAppUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL || "https://flow.codingladies.org";
@@ -28,7 +29,7 @@ export async function notifyAddedToProject({
       .where(eq(users.id, userId))
       .limit(1);
 
-    if (!user || !user.email) return;
+    if (!user) return;
 
     const [actor] = await db
       .select({ name: users.name })
@@ -45,6 +46,15 @@ export async function notifyAddedToProject({
     const projectName = project?.name || "a project";
     const actorName = actor?.name || "A team member";
     const projectUrl = `${getAppUrl()}/p/${projectId}`;
+
+    // Send Web Push Notification
+    sendPushToUser(userId, {
+      title: `Added to ${projectName}`,
+      body: `${actorName} added you to the project ${projectName}.`,
+      url: projectUrl,
+    }).catch(() => {});
+
+    if (!user.email) return;
 
     await emailSender.sendEmail({
       to: user.email,
@@ -116,7 +126,16 @@ export async function notifyTaskAssigned({
         .where(eq(users.id, id))
         .limit(1);
 
-      if (!assignee || !assignee.email) continue;
+      if (!assignee) continue;
+
+      // Push notification
+      sendPushToUser(id, {
+        title: `Assigned: ${taskKey}`,
+        body: `${actorName} assigned you to "${task.title}" in ${projectName}`,
+        url: taskUrl,
+      }).catch(() => {});
+
+      if (!assignee.email) continue;
 
       await emailSender.sendEmail({
         to: assignee.email,
@@ -207,6 +226,9 @@ export async function notifyComment({
 
     if (recipientIds.size === 0) return;
 
+    const preview =
+      commentBody.length > 200 ? commentBody.slice(0, 197) + "…" : commentBody;
+
     for (const recipientId of recipientIds) {
       const [recipient] = await db
         .select({ email: users.email, name: users.name })
@@ -214,10 +236,16 @@ export async function notifyComment({
         .where(eq(users.id, recipientId))
         .limit(1);
 
-      if (!recipient || !recipient.email) continue;
+      if (!recipient) continue;
 
-      const preview =
-        commentBody.length > 200 ? commentBody.slice(0, 197) + "…" : commentBody;
+      // Push notification
+      sendPushToUser(recipientId, {
+        title: `Comment on ${taskKey}`,
+        body: `${authorName}: ${preview}`,
+        url: taskUrl,
+      }).catch(() => {});
+
+      if (!recipient.email) continue;
 
       await emailSender.sendEmail({
         to: recipient.email,

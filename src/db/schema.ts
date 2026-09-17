@@ -33,9 +33,20 @@ export const users = pgTable(
     photoUrl: text("photo_url"),
     /** Timestamp when user was last active/pinged (for presence) */
     lastActiveAt: timestamp("last_active_at", { withTimezone: true }),
+    /** 2FA TOTP secret (base32 encoded) */
+    twoFactorSecret: text("two_factor_secret"),
+    /** Whether 2FA is active for this user */
+    twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
+    /** Single-use emergency backup recovery codes */
+    twoFactorBackupCodes: jsonb("two_factor_backup_codes").$type<string[]>().default([]),
+    /** Google OAuth Sub/ID if linked */
+    googleId: text("google_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("users_email_key").on(t.email)],
+  (t) => [
+    uniqueIndex("users_email_key").on(t.email),
+    uniqueIndex("users_google_id_key").on(t.googleId),
+  ],
 );
 
 export const sessions = pgTable(
@@ -48,6 +59,52 @@ export const sessions = pgTable(
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   },
   (t) => [index("sessions_user_idx").on(t.userId)],
+);
+
+export const twoFactorChallenges = pgTable(
+  "two_factor_challenges",
+  {
+    id: text("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("two_factor_challenges_user_idx").on(t.userId)],
+);
+
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("push_subscriptions_user_idx").on(t.userId),
+    uniqueIndex("push_subscriptions_endpoint_key").on(t.endpoint),
+  ],
+);
+
+export const aiUsageLogs = pgTable(
+  "ai_usage_logs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    action: text("action").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("ai_usage_logs_user_created_idx").on(t.userId, t.createdAt),
+  ],
 );
 
 /* ------------------------------------------------------------------ */

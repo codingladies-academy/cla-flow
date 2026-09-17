@@ -10,6 +10,7 @@ import { Card, Note, Row, Section, Spacer } from "@/components/ui/Layout";
 import { Toasts, type Toast } from "@/components/ui/Toasts";
 import { UserMenu, type SessionUser } from "@/components/ui/UserMenu";
 import { useTheme } from "@/lib/theme";
+import { subscribeToPushNotifications } from "@/lib/push-client";
 import styles from "./account.module.css";
 
 export function Account({ user, version, isAdmin }: { user: SessionUser; version: string; isAdmin: boolean }) {
@@ -154,6 +155,10 @@ export function Account({ user, version, isAdmin }: { user: SessionUser; version
           </Row>
         </Card>
 
+        <NotificationsCalendarSection notify={notify} userEmail={user.email} />
+
+        <TwoFactorSection notify={notify} />
+
         <PasswordSection notify={notify} />
 
         <span className={styles.version}>CLA Flow {version}</span>
@@ -290,6 +295,300 @@ function PasswordSection({ notify }: { notify: (text: string, kind?: Toast["kind
             Sign out everywhere
           </Button>
         </Row>
+      </Card>
+    </Section>
+  );
+}
+
+function NotificationsCalendarSection({
+  notify,
+  userEmail,
+}: {
+  notify: (text: string, kind?: Toast["kind"]) => void;
+  userEmail: string;
+}) {
+  const [pushStatus, setPushStatus] = useState<"default" | "granted" | "denied" | "unsupported">("default");
+  const [copiedCalendar, setCopiedCalendar] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setPushStatus(Notification.permission);
+    } else {
+      setPushStatus("unsupported");
+    }
+  }, []);
+
+  async function enablePush() {
+    try {
+      const ok = await subscribeToPushNotifications();
+      if (ok) {
+        setPushStatus("granted");
+        notify("Push notifications enabled!", "info");
+      } else {
+        notify("Could not enable push notifications. Check browser permissions.");
+      }
+    } catch {
+      notify("Failed to enable push notifications.");
+    }
+  }
+
+  const calendarFeedUrl = typeof window !== "undefined" ? `${window.location.origin}/api/calendar/my-tasks` : "";
+
+  function copyFeedUrl() {
+    if (!calendarFeedUrl) return;
+    navigator.clipboard.writeText(calendarFeedUrl);
+    setCopiedCalendar(true);
+    notify("Calendar feed URL copied to clipboard.", "info");
+    setTimeout(() => setCopiedCalendar(false), 2000);
+  }
+
+  return (
+    <Section title="Notifications & Calendar">
+      <Card>
+        <Row className={styles.stack}>
+          <Field
+            label="Push Notifications"
+            note="Receive instant notifications for assignments, comments, and task mentions."
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 4 }}>
+              {pushStatus === "granted" ? (
+                <span style={{ fontSize: 13, color: "var(--accent-ink, #059669)", fontWeight: 500 }}>
+                  ✓ Push notifications active
+                </span>
+              ) : pushStatus === "denied" ? (
+                <span style={{ fontSize: 13, color: "var(--color-danger, #ef4444)" }}>
+                  Blocked in browser settings
+                </span>
+              ) : (
+                <Button onClick={enablePush}>Enable Push Notifications</Button>
+              )}
+            </div>
+          </Field>
+        </Row>
+
+        <Row className={styles.stack}>
+          <Field
+            label="Google Calendar Feed"
+            note="Subscribe in Google Calendar, Apple Calendar, or Outlook to sync your task due dates."
+          >
+            <div style={{ display: "flex", gap: 8, marginTop: 4, alignItems: "center" }}>
+              <Input
+                size="lg"
+                block
+                readOnly
+                value={calendarFeedUrl}
+                aria-label="Calendar Feed URL"
+              />
+              <Button onClick={copyFeedUrl} variant="ghost" style={{ flexShrink: 0 }}>
+                {copiedCalendar ? "Copied!" : "Copy Feed URL"}
+              </Button>
+            </div>
+          </Field>
+        </Row>
+      </Card>
+    </Section>
+  );
+}
+
+function TwoFactorSection({ notify }: { notify: (text: string, kind?: Toast["kind"]) => void }) {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [setupData, setSetupData] = useState<{ secret: string; uri: string } | null>(null);
+  const [code, setCode] = useState("");
+  const [backupCodes, setBackupCodes] = useState<string[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [copiedSecret, setCopiedSecret] = useState(false);
+
+  useEffect(() => {
+    void api
+      .get<{ enabled: boolean }>("/api/auth/2fa/setup")
+      .then((res) => setEnabled(res.enabled))
+      .catch(() => setEnabled(false));
+  }, []);
+
+  async function startSetup() {
+    setBusy(true);
+    try {
+      const res = await api.get<{ enabled: boolean; secret: string; uri: string }>("/api/auth/2fa/setup");
+      if (res.enabled) {
+        setEnabled(true);
+      } else {
+        setSetupData({ secret: res.secret, uri: res.uri });
+      }
+    } catch {
+      notify("Failed to initiate 2FA setup.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmSetup() {
+    if (!setupData || !code.trim()) return;
+    setBusy(true);
+    try {
+      const res = await api.post<{ success: boolean; backupCodes: string[] }>("/api/auth/2fa/setup", {
+        secret: setupData.secret,
+        code: code.trim(),
+      });
+      setEnabled(true);
+      setBackupCodes(res.backupCodes);
+      setSetupData(null);
+      setCode("");
+      notify("Two-factor authentication enabled successfully!", "info");
+    } catch (err: any) {
+      notify(err instanceof Error ? err.message : "Invalid code. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function disable2FA() {
+    if (!confirm("Are you sure you want to disable two-factor authentication?")) return;
+    setBusy(true);
+    try {
+      await api.del("/api/auth/2fa/setup");
+      setEnabled(false);
+      setBackupCodes(null);
+      notify("Two-factor authentication disabled.", "info");
+    } catch {
+      notify("Failed to disable 2FA.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Section title="Two-Factor Authentication (2FA)">
+      <Card>
+        {enabled === null ? (
+          <Note>Checking 2FA status…</Note>
+        ) : enabled ? (
+          <>
+            <Row className={styles.stack}>
+              <Field
+                label="Status"
+                note="Your account is protected with Google Authenticator / TOTP two-factor security."
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ fontSize: 13, color: "var(--accent-ink, #059669)", fontWeight: 600 }}>
+                    🛡️ Two-Factor Authentication is Active
+                  </span>
+                </div>
+              </Field>
+            </Row>
+
+            {backupCodes && backupCodes.length > 0 && (
+              <Row className={styles.stack}>
+                <Field
+                  label="Emergency Backup Codes"
+                  note="Save these single-use codes safely. If you lose your Authenticator app, each code can be used once to sign in."
+                >
+                  <div
+                    style={{
+                      background: "var(--bg-card, #f8fafc)",
+                      padding: "12px 16px",
+                      borderRadius: 8,
+                      fontFamily: "var(--font-mono, monospace)",
+                      fontSize: 13,
+                      display: "grid",
+                      gridTemplateColumns: "repeat(2, 1fr)",
+                      gap: "6px 16px",
+                      marginTop: 4,
+                    }}
+                  >
+                    {backupCodes.map((c, i) => (
+                      <div key={i}>{c}</div>
+                    ))}
+                  </div>
+                </Field>
+              </Row>
+            )}
+
+            <Row>
+              <Spacer />
+              <Button variant="ghost" onClick={disable2FA} disabled={busy}>
+                Disable 2FA
+              </Button>
+            </Row>
+          </>
+        ) : setupData ? (
+          <>
+            <Row className={styles.stack}>
+              <Field
+                label="1. Scan QR Code in Authenticator App"
+                note="Open Google Authenticator, Authy, or Apple Passwords and scan this QR code or enter the key manually."
+              >
+                <div style={{ display: "flex", gap: 20, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(setupData.uri)}`}
+                    alt="2FA QR Code"
+                    style={{ width: 140, height: 140, borderRadius: 8, border: "1px solid var(--line)" }}
+                  />
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1, minWidth: 200 }}>
+                    <span style={{ fontSize: 12, color: "var(--muted)" }}>Manual Entry Key:</span>
+                    <code
+                      style={{
+                        padding: "6px 10px",
+                        background: "var(--bg-top)",
+                        border: "1px solid var(--line)",
+                        borderRadius: 6,
+                        fontSize: 13,
+                        wordBreak: "break-all",
+                      }}
+                    >
+                      {setupData.secret}
+                    </code>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        navigator.clipboard.writeText(setupData.secret);
+                        setCopiedSecret(true);
+                        setTimeout(() => setCopiedSecret(false), 2000);
+                      }}
+                    >
+                      {copiedSecret ? "Copied!" : "Copy Secret Key"}
+                    </Button>
+                  </div>
+                </div>
+              </Field>
+            </Row>
+
+            <Row className={styles.stack}>
+              <Field
+                label="2. Enter 6-digit Code from App"
+                note="Type the current 6-digit code displayed in your Authenticator app to confirm."
+              >
+                <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                  <Input
+                    size="lg"
+                    type="text"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    placeholder="123456"
+                    maxLength={6}
+                    autoFocus
+                  />
+                  <Button onClick={confirmSetup} disabled={busy || code.trim().length !== 6}>
+                    {busy ? "Verifying…" : "Confirm & Enable"}
+                  </Button>
+                </div>
+              </Field>
+            </Row>
+
+            <Row>
+              <Button variant="ghost" onClick={() => setSetupData(null)}>
+                Cancel
+              </Button>
+            </Row>
+          </>
+        ) : (
+          <Row>
+            <Note>Add an extra layer of security to your CLA Flow account using an Authenticator app.</Note>
+            <Spacer />
+            <Button onClick={startSetup} disabled={busy}>
+              Set up 2FA
+            </Button>
+          </Row>
+        )}
       </Card>
     </Section>
   );
