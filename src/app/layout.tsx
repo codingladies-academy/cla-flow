@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import { PWAInstaller } from "@/components/pwa/PWAInstaller";
 import "./globals.css";
@@ -17,11 +17,14 @@ const mono = IBM_Plex_Mono({
   display: "swap",
 });
 
+export const viewport: Viewport = {
+  themeColor: "#00BFB3",
+};
+
 export const metadata: Metadata = {
   title: { default: "CLA Flow", template: "%s" },
   description: "CLA Flow — manage staff, volunteers, tasks and projects for Coding Ladies Academy.",
   manifest: "/manifest.webmanifest",
-  themeColor: "#00BFB3",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
