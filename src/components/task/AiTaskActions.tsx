@@ -65,8 +65,16 @@ export function AiTaskActions({
       if (onReload) {
         await onReload();
       }
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("ushabti:remote-change"));
+      }
 
       setAppliedMessage(`✓ Added ${lines.length} items to checklist!`);
+      setTimeout(() => {
+        setOpen(false);
+        setAiResult(null);
+        setAppliedMessage(null);
+      }, 1200);
     } catch (err: any) {
       setError(err instanceof Error ? err.message : "Failed to add checklist items.");
     } finally {
@@ -85,6 +93,11 @@ export function AiTaskActions({
       const updated = currentDescription ? `${currentDescription.trim()}${addition}` : aiResult.content;
       onUpdateDescription(updated);
       setAppliedMessage("✓ Added to description!");
+      setTimeout(() => {
+        setOpen(false);
+        setAiResult(null);
+        setAppliedMessage(null);
+      }, 1200);
     } catch (err: any) {
       setError(err instanceof Error ? err.message : "Failed to update description.");
     } finally {
@@ -102,7 +115,15 @@ export function AiTaskActions({
       if (onReload) {
         await onReload();
       }
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("ushabti:remote-change"));
+      }
       setAppliedMessage("✓ Posted as comment!");
+      setTimeout(() => {
+        setOpen(false);
+        setAiResult(null);
+        setAppliedMessage(null);
+      }, 1200);
     } catch (err: any) {
       setError(err instanceof Error ? err.message : "Failed to post comment.");
     } finally {
