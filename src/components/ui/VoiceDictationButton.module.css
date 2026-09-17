@@ -4,8 +4,8 @@
   justify-content: center;
   position: relative;
   background: transparent;
-  color: var(--color-muted, #64748b);
-  border: 1px solid var(--color-border, #e2e8f0);
+  color: var(--muted, #8b919b);
+  border: 1px solid var(--line-dash, #23272e);
   border-radius: 6px;
   cursor: pointer;
   padding: 4px;
@@ -13,9 +13,9 @@
 }
 
 .button:hover {
-  color: var(--color-text, #0f172a);
-  background: var(--color-surface-hover, rgba(0, 0, 0, 0.04));
-  border-color: var(--color-border-hover, #cbd5e1);
+  color: var(--text, #e8e9ec);
+  background: var(--bg-hover, #1b1e24);
+  border-color: var(--line-menu, #262b32);
 }
 
 .sm {
@@ -30,7 +30,7 @@
 
 .listening {
   color: #ef4444 !important;
-  background: rgba(239, 68, 68, 0.08) !important;
+  background: rgba(239, 68, 68, 0.14) !important;
   border-color: #ef4444 !important;
   animation: pulseBorder 1.5s infinite;
 }
