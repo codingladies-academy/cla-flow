@@ -249,7 +249,12 @@ export function TaskPanel({ taskId, onClose }: { taskId: string; onClose: () => 
             {boardTask.key}
           </button>
           <span style={{ flex: 1 }} />
-          <AiTaskActions taskId={taskId} />
+          <AiTaskActions
+            taskId={taskId}
+            onReload={load}
+            currentDescription={boardTask.description}
+            onUpdateDescription={(description) => void patchTask(taskId, { description })}
+          />
           <button
             className={styles.iconButton}
             aria-label="Task menu"

@@ -174,3 +174,34 @@
   color: var(--text, #e8e9ec);
   white-space: pre-wrap;
 }
+
+.successMsg {
+  font-size: 12px;
+  color: var(--accent-ink, #059669);
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+.applyBar {
+  display: flex;
+  margin-top: 6px;
+  border-top: 1px solid var(--line-faint, #16181c);
+  padding-top: 8px;
+}
+
+.applyBtn {
+  width: 100% !important;
+  justify-content: center !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  background: var(--accent, #3fb0c8) !important;
+  color: var(--accent-ink, #ffffff) !important;
+}
+
+:global([data-theme="light"]) .applyBtn {
+  background: #008f86 !important;
+  color: #ffffff !important;
+}
