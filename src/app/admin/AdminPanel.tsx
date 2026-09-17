@@ -182,6 +182,7 @@ export function AdminPanel({
           propertyRenames,
           optionRenames,
           viewRenames,
+          applyStandardCla: true,
         },
       );
 
