@@ -18,10 +18,10 @@ export const DEFAULT_PROPERTIES: DefaultProperty[] = [
     type: "select",
     options: [
       { name: "Backlog", color: "#6b7280" },
-      { name: "Todo", color: "#9aa0aa" },
+      { name: "To Do", color: "#9aa0aa" },
       { name: "In Progress", color: "#d1913a" },
-      { name: "Ready", color: "#3fb0c8" },
-      { name: "Shipped", color: "#4f8a5b" },
+      { name: "Review", color: "#3fb0c8" },
+      { name: "Done", color: "#4f8a5b" },
     ],
   },
   {
@@ -36,39 +36,38 @@ export const DEFAULT_PROPERTIES: DefaultProperty[] = [
   },
   { name: "Assignee", type: "person" },
   {
-    name: "Phase",
+    name: "Stage",
     type: "select",
     options: [
-      { name: "PoC", color: "#8b8f98" },
-      { name: "MVP", color: "#3fb0c8" },
-      { name: "MMP", color: "#6d5bd0" },
-      { name: "Pilot", color: "#d1913a" },
-      { name: "GA", color: "#4f8a5b" },
+      { name: "Planning", color: "#8b8f98" },
+      { name: "Execution", color: "#3fb0c8" },
+      { name: "Monitoring", color: "#6d5bd0" },
+      { name: "Review", color: "#d1913a" },
+      { name: "Completed", color: "#4f8a5b" },
     ],
   },
   {
-    name: "Estimate",
+    name: "Scope",
     type: "select",
     options: [
-      { name: "XS", color: "#8b8f98" },
-      { name: "S", color: "#4b8fbe" },
-      { name: "M", color: "#3fb0c8" },
-      { name: "L", color: "#d1913a" },
-      { name: "XL", color: "#e0574d" },
+      { name: "Small", color: "#8b8f98" },
+      { name: "Medium", color: "#4b8fbe" },
+      { name: "Large", color: "#d1913a" },
     ],
   },
   {
-    name: "Labels",
+    name: "Category",
     type: "multi_select",
     options: [
-      { name: "bug", color: "#e0574d" },
-      { name: "feature", color: "#2f9e7a" },
-      { name: "infra", color: "#4b8fbe" },
-      { name: "ux", color: "#c2557a" },
-      { name: "docs", color: "#7a8a2f" },
+      { name: "Operations", color: "#2f9e7a" },
+      { name: "Logistics", color: "#4b8fbe" },
+      { name: "Training", color: "#6d5bd0" },
+      { name: "Communications", color: "#c2557a" },
+      { name: "Finance", color: "#d1913a" },
+      { name: "General", color: "#7a8a2f" },
     ],
   },
-  { name: "Due", type: "date" },
+  { name: "Due Date", type: "date" },
 ];
 
 /**
@@ -81,8 +80,8 @@ export const DEFAULT_VIEWS: {
   groupBy: string | null;
   isDefault: boolean;
 }[] = [
-  { name: "Board", kind: "board", groupBy: "Status", isDefault: true },
-  { name: "Phases", kind: "board", groupBy: "Phase", isDefault: false },
+  { name: "Task Board", kind: "board", groupBy: "Status", isDefault: true },
+  { name: "Stages", kind: "board", groupBy: "Stage", isDefault: false },
 ];
 
 export function suggestProjectKey(name: string): string {

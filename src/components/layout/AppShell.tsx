@@ -117,9 +117,19 @@ export function AppShell({
     }
 
     checkUnread();
-    const timer = setInterval(checkUnread, 15000);
+
+    let source: EventSource | null = null;
+    try {
+      source = new EventSource("/api/chat/stream");
+      source.addEventListener("chat", () => {
+        void checkUnread();
+      });
+    } catch {}
+
+    const timer = setInterval(checkUnread, 60000);
     return () => {
       cancelled = true;
+      source?.close();
       clearInterval(timer);
     };
   }, [activeWorkspaceId]);

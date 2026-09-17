@@ -58,6 +58,7 @@ export function ChatPanel({
   const [sending, setSending] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
+  const [readerPopoverId, setReaderPopoverId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -160,23 +161,99 @@ export function ChatPanel({
     }
   }
 
-  // Polling for live updates when open
+  // Initial load when open
   useEffect(() => {
     if (!open) return;
-    loadRooms();
+    void loadRooms();
   }, [open, activeWorkspaceId]);
 
   useEffect(() => {
     if (!open || !activeRoomId) return;
-    loadMessages(activeRoomId);
+    void loadMessages(activeRoomId);
 
+    // Passive safety fallback polling (30s) in case of network disconnects
     const interval = setInterval(() => {
-      loadMessages(activeRoomId, true);
-      loadRooms();
-    }, 4000);
+      void loadMessages(activeRoomId, true);
+      void loadRooms();
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [open, activeRoomId]);
+
+  // Real-time SSE Stream for instant messages and live read receipts
+  useEffect(() => {
+    if (!open) return;
+
+    const source = new EventSource("/api/chat/stream");
+
+    source.addEventListener("chat", (e) => {
+      try {
+        const event = JSON.parse(e.data);
+        if (event.type === "new_message" && event.message) {
+          const incomingMsg = event.message as ChatMessageDTO;
+          if (incomingMsg.roomId === activeRoomId) {
+            setMessages((prev) => {
+              // Deduplicate if already present or replace temp
+              const alreadyExists = prev.some((m) => m.id === incomingMsg.id);
+              if (alreadyExists) return prev;
+              const filtered = prev.filter(
+                (m) => !(m.isPending && m.content === incomingMsg.content && m.senderId === incomingMsg.senderId),
+              );
+              return [...filtered, incomingMsg];
+            });
+
+            if (incomingMsg.senderId !== user.id) {
+              playNotificationSound();
+              sendDesktopNotification(`${incomingMsg.senderName} in ${activeRoomTitle}`, incomingMsg.content);
+              void api.post(`/api/chat/rooms/${activeRoomId}/read`, {}).catch(() => {});
+            }
+          } else {
+            // Notification for other room
+            if (incomingMsg.senderId !== user.id) {
+              playNotificationSound();
+              sendDesktopNotification(`${incomingMsg.senderName}`, incomingMsg.content);
+            }
+          }
+          void loadRooms();
+        } else if (event.type === "read" && event.roomId === activeRoomId) {
+          const readerUserId = event.userId;
+          const readTimeMs = event.lastReadAt ? new Date(event.lastReadAt).getTime() : Date.now();
+          setMessages((prev) =>
+            prev.map((msg) => {
+              if (msg.senderId === readerUserId) return msg;
+              const msgTimeMs = new Date(msg.createdAt).getTime();
+              if (readTimeMs >= msgTimeMs) {
+                const currentReaders = msg.readers ?? [];
+                if (!currentReaders.some((r) => r.id === readerUserId)) {
+                  const readerUser = allStaff.find((s) => s.id === readerUserId);
+                  const updatedReaders = [
+                    ...currentReaders,
+                    {
+                      id: readerUserId,
+                      name: readerUser?.name ?? "Staff",
+                      photoUrl: readerUser?.photoUrl ?? null,
+                      color: readerUser?.color ?? "#00BFB3",
+                      readAt: event.lastReadAt || new Date().toISOString(),
+                    },
+                  ];
+                  const isAllRead =
+                    msg.totalMembers ? updatedReaders.length >= msg.totalMembers : true;
+                  return { ...msg, readers: updatedReaders, isAllRead };
+                }
+              }
+              return msg;
+            }),
+          );
+        }
+      } catch (err) {
+        console.error("Error processing chat SSE event:", err);
+      }
+    });
+
+    return () => {
+      source.close();
+    };
+  }, [open, activeRoomId, activeRoomTitle, allStaff, user.id]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -184,6 +261,17 @@ export function ChatPanel({
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, open]);
+
+  // Close reader popover on outside click
+  useEffect(() => {
+    function handleClickOutside() {
+      if (readerPopoverId) setReaderPopoverId(null);
+    }
+    if (readerPopoverId) {
+      window.addEventListener("click", handleClickOutside);
+      return () => window.removeEventListener("click", handleClickOutside);
+    }
+  }, [readerPopoverId]);
 
   // Start or open a DM with a staff member or volunteer
   async function handleOpenDirectMessage(targetStaffId: string, staffName: string) {
@@ -213,22 +301,48 @@ export function ChatPanel({
     }
   }
 
+  // Instant 0ms Optimistic Message Sending
   async function handleSendMessage(e?: React.FormEvent) {
     if (e) e.preventDefault();
     const text = inputText.trim();
     if (!text || !activeRoomId || sending) return;
 
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const optimisticMsg: ChatMessageDTO = {
+      id: tempId,
+      roomId: activeRoomId,
+      senderId: user.id,
+      senderName: user.name,
+      senderColor: user.color,
+      senderPhotoUrl: user.photoUrl ?? null,
+      content: text,
+      createdAt: new Date().toISOString(),
+      readers: [],
+      isAllRead: false,
+      totalMembers: 1,
+      isPending: true,
+    };
+
+    // 1. Instantly render in UI and clear text box (0ms)
+    setMessages((prev) => [...prev, optimisticMsg]);
+    setInputText("");
     setSending(true);
+
     try {
       const res = await api.post<{ message: ChatMessageDTO }>(
         `/api/chat/rooms/${activeRoomId}/messages`,
         { content: text },
       );
-      setMessages((prev) => [...prev, res.message]);
-      setInputText("");
-      loadRooms();
+      // Replace optimistic message with actual persisted message
+      setMessages((prev) =>
+        prev.map((m) => (m.id === tempId ? { ...res.message, isPending: false } : m)),
+      );
+      void loadRooms();
     } catch (err) {
       console.error("Failed to send message:", err);
+      // Remove temp message if failed and restore text
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setInputText(text);
     } finally {
       setSending(false);
       setTimeout(() => inputRef.current?.focus(), 50);
@@ -565,11 +679,89 @@ export function ChatPanel({
                     <div className={styles.messageBubble}>
                       <div className={styles.messageHeader}>
                         <span className={styles.senderName}>{isSelf ? "You" : msg.senderName}</span>
-                        <span className={styles.messageTime}>{timeStr}</span>
                       </div>
                       <div className={styles.messageBody}>
                         <Markdown text={msg.content} />
                         <GoogleDriveCardList text={msg.content} />
+                      </div>
+                      <div className={styles.messageFooter}>
+                        <span className={styles.messageTime}>{timeStr}</span>
+                        {isSelf && (
+                          <div
+                            className={styles.readStatusContainer}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setReaderPopoverId(readerPopoverId === msg.id ? null : msg.id);
+                            }}
+                          >
+                            <div
+                              className={styles.readStatus}
+                              title={
+                                msg.isPending
+                                  ? "Sending..."
+                                  : msg.isAllRead
+                                    ? `Read by all (${msg.readers?.length ?? 0})`
+                                    : (msg.readers?.length ?? 0) > 0
+                                      ? `Read by ${msg.readers!.map((r) => r.name).join(", ")}`
+                                      : "Delivered (1 tick)"
+                              }
+                            >
+                              {msg.isPending ? (
+                                <span className={styles.tickPending}>⏳</span>
+                              ) : msg.isAllRead ? (
+                                <span className={styles.tickRead} aria-label="Read by all">
+                                  ✓✓
+                                </span>
+                              ) : (msg.readers?.length ?? 0) > 0 ? (
+                                <span className={styles.tickPartial} aria-label="Partially read">
+                                  ✓<span className={styles.tickCount}>{msg.readers!.length}</span>
+                                </span>
+                              ) : (
+                                <span className={styles.tickSent} aria-label="Sent">
+                                  ✓
+                                </span>
+                              )}
+                            </div>
+
+                            {readerPopoverId === msg.id && (
+                              <div
+                                className={styles.readersTooltip}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className={styles.readersHeader}>
+                                  {(msg.readers?.length ?? 0) > 0
+                                    ? `Read by (${msg.readers!.length})`
+                                    : "Status"}
+                                </div>
+                                {(msg.readers?.length ?? 0) > 0 ? (
+                                  <div className={styles.readersList}>
+                                    {msg.readers!.map((r) => (
+                                      <div key={r.id} className={styles.readerItem}>
+                                        <Avatar
+                                          name={r.name}
+                                          color={r.color}
+                                          photoUrl={r.photoUrl}
+                                          size={16}
+                                        />
+                                        <span className={styles.readerName}>{r.name}</span>
+                                        <span className={styles.readerTime}>
+                                          {new Date(r.readAt).toLocaleTimeString([], {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div style={{ color: "#94a3b8", fontSize: "0.6875rem" }}>
+                                    Delivered · Not read yet
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

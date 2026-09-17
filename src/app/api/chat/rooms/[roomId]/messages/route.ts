@@ -43,7 +43,7 @@ export async function POST(
       return NextResponse.json({ error: "Message content cannot be empty" }, { status: 400 });
     }
 
-    const message = await sendMessage(roomId, user.id, content);
+    const message = await sendMessage(roomId, user.id, content, body.clientId);
     return NextResponse.json({ message });
   } catch (err) {
     console.error("Error sending message:", err);

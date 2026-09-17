@@ -2,6 +2,15 @@ import { and, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { chatMessages, chatRoomMembers, chatRooms, users, workspaceMembers, workspaces } from "@/db/schema";
 import { emailSender } from "@/lib/emailSender";
+import { publishChat } from "@/lib/events";
+
+export type ChatReaderDTO = {
+  id: string;
+  name: string;
+  photoUrl: string | null;
+  color: string;
+  readAt: string;
+};
 
 export type ChatMessageDTO = {
   id: string;
@@ -12,6 +21,10 @@ export type ChatMessageDTO = {
   senderPhotoUrl: string | null;
   content: string;
   createdAt: string;
+  readers?: ChatReaderDTO[];
+  isAllRead?: boolean;
+  totalMembers?: number;
+  isPending?: boolean;
 };
 
 export type ChatRoomDTO = {
@@ -465,7 +478,7 @@ async function dispatchOfflineChatNotification(
 }
 
 /**
- * Fetch messages in a room.
+ * Fetch messages in a room with read receipts.
  */
 export async function listMessages(
   roomId: string,
@@ -475,6 +488,67 @@ export async function listMessages(
   const conditions = [eq(chatMessages.roomId, roomId)];
   if (before) {
     conditions.push(sql`${chatMessages.createdAt} < ${new Date(before)}`);
+  }
+
+  const [room] = await db
+    .select({ id: chatRooms.id, kind: chatRooms.kind, workspaceId: chatRooms.workspaceId })
+    .from(chatRooms)
+    .where(eq(chatRooms.id, roomId))
+    .limit(1);
+
+  // Fetch all members with their lastReadAt for this room
+  let membersList: Array<{
+    id: string;
+    name: string;
+    photoUrl: string | null;
+    color: string;
+    lastReadAt: Date | null;
+  }> = [];
+
+  if (room?.kind === "direct") {
+    membersList = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        photoUrl: users.photoUrl,
+        color: users.color,
+        lastReadAt: chatRoomMembers.lastReadAt,
+      })
+      .from(chatRoomMembers)
+      .innerJoin(users, eq(users.id, chatRoomMembers.userId))
+      .where(eq(chatRoomMembers.roomId, roomId));
+  } else if (room?.kind === "workspace" && room.workspaceId) {
+    membersList = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        photoUrl: users.photoUrl,
+        color: users.color,
+        lastReadAt: chatRoomMembers.lastReadAt,
+      })
+      .from(workspaceMembers)
+      .innerJoin(users, eq(users.id, workspaceMembers.userId))
+      .leftJoin(
+        chatRoomMembers,
+        and(eq(chatRoomMembers.roomId, roomId), eq(chatRoomMembers.userId, users.id)),
+      )
+      .where(and(eq(workspaceMembers.workspaceId, room.workspaceId), eq(users.kind, "human")));
+  } else {
+    // global
+    membersList = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        photoUrl: users.photoUrl,
+        color: users.color,
+        lastReadAt: chatRoomMembers.lastReadAt,
+      })
+      .from(users)
+      .leftJoin(
+        chatRoomMembers,
+        and(eq(chatRoomMembers.roomId, roomId), eq(chatRoomMembers.userId, users.id)),
+      )
+      .where(eq(users.kind, "human"));
   }
 
   const rows = await db
@@ -494,17 +568,36 @@ export async function listMessages(
     .orderBy(desc(chatMessages.createdAt))
     .limit(limit);
 
-  // Return oldest to newest for chat view
-  return rows.reverse().map((r) => ({
-    id: r.id,
-    roomId: r.roomId,
-    senderId: r.senderId,
-    senderName: r.senderName,
-    senderColor: r.senderColor,
-    senderPhotoUrl: r.senderPhotoUrl,
-    content: r.content,
-    createdAt: r.createdAt.toISOString(),
-  }));
+  // Return oldest to newest for chat view with readers computed
+  return rows.reverse().map((r) => {
+    const otherMembers = membersList.filter((m) => m.id !== r.senderId);
+    const msgTime = new Date(r.createdAt).getTime();
+    const readers = otherMembers
+      .filter((m) => m.lastReadAt && new Date(m.lastReadAt).getTime() >= msgTime)
+      .map((m) => ({
+        id: m.id,
+        name: m.name,
+        photoUrl: m.photoUrl,
+        color: m.color,
+        readAt: m.lastReadAt!.toISOString(),
+      }));
+
+    const isAllRead = otherMembers.length > 0 && readers.length >= otherMembers.length;
+
+    return {
+      id: r.id,
+      roomId: r.roomId,
+      senderId: r.senderId,
+      senderName: r.senderName,
+      senderColor: r.senderColor,
+      senderPhotoUrl: r.senderPhotoUrl,
+      content: r.content,
+      createdAt: r.createdAt.toISOString(),
+      readers,
+      isAllRead,
+      totalMembers: otherMembers.length,
+    };
+  });
 }
 
 /**
@@ -514,6 +607,7 @@ export async function sendMessage(
   roomId: string,
   senderId: string,
   content: string,
+  clientId?: string,
 ): Promise<ChatMessageDTO> {
   const trimmed = content.trim();
   if (!trimmed) {
@@ -562,7 +656,7 @@ export async function sendMessage(
   // Asynchronously dispatch offline email notifications without blocking
   void dispatchOfflineChatNotification(roomId, senderId, senderName, trimmed);
 
-  return {
+  const messageDto: ChatMessageDTO = {
     id: created.id,
     roomId: created.roomId,
     senderId: created.senderId,
@@ -571,22 +665,47 @@ export async function sendMessage(
     senderPhotoUrl: sender?.photoUrl ?? null,
     content: created.content,
     createdAt: created.createdAt.toISOString(),
+    readers: [],
+    isAllRead: false,
+    totalMembers: 1,
   };
+
+  // Broadcast real-time message to all active clients via SSE
+  void publishChat({
+    type: "new_message",
+    roomId,
+    senderId,
+    clientId,
+    message: messageDto,
+    timestamp: messageDto.createdAt,
+  });
+
+  return messageDto;
 }
 
 /**
  * Mark a room as read by user.
  */
 export async function markRoomRead(roomId: string, userId: string): Promise<void> {
+  const now = new Date();
   await db
     .insert(chatRoomMembers)
     .values({
       roomId,
       userId,
-      lastReadAt: new Date(),
+      lastReadAt: now,
     })
     .onConflictDoUpdate({
       target: [chatRoomMembers.roomId, chatRoomMembers.userId],
-      set: { lastReadAt: new Date() },
+      set: { lastReadAt: now },
     });
+
+  // Broadcast read event to all active clients via SSE
+  void publishChat({
+    type: "read",
+    roomId,
+    userId,
+    lastReadAt: now.toISOString(),
+    timestamp: now.toISOString(),
+  });
 }

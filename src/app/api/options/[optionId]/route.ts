@@ -60,29 +60,79 @@ export const DELETE = route<Ctx>(async (req, ctx) => {
   const { user, membership } = await guard(owner.projectId);
   ownerOnly(user, membership, "delete an option");
 
-  // Tasks that hold this option lose the value. Single-select clears, and
-  // multi-select drops the one entry.
-  await db
-    .update(taskValues)
-    .set({ value: null })
-    .where(
-      and(
-        eq(taskValues.propertyId, owner.propertyId),
-        sql`${taskValues.value} = ${JSON.stringify(optionId)}::jsonb`,
-      ),
-    );
-  await db
-    .update(taskValues)
-    .set({
-      value: sql`(select coalesce(jsonb_agg(elem), '[]'::jsonb) from jsonb_array_elements(${taskValues.value}) elem where elem <> ${JSON.stringify(optionId)}::jsonb)`,
-    })
-    .where(
-      and(
-        eq(taskValues.propertyId, owner.propertyId),
-        sql`jsonb_typeof(${taskValues.value}) = 'array'`,
-        sql`${taskValues.value} @> ${JSON.stringify([optionId])}::jsonb`,
-      ),
-    );
+  // Query sibling options to find the previous column
+  const siblings = await db
+    .select({ id: propertyOptions.id, position: propertyOptions.position })
+    .from(propertyOptions)
+    .where(eq(propertyOptions.propertyId, owner.propertyId))
+    .orderBy(byPos(propertyOptions.position));
+
+  const targetIndex = siblings.findIndex((s) => s.id === optionId);
+  const fallbackOptionId =
+    targetIndex > 0
+      ? siblings[targetIndex - 1].id
+      : siblings.length > 1
+        ? siblings[targetIndex + 1]?.id ?? null
+        : null;
+
+  if (fallbackOptionId) {
+    // Reassign single-select tasks to the previous (fallback) column
+    await db
+      .update(taskValues)
+      .set({ value: JSON.stringify(fallbackOptionId) })
+      .where(
+        and(
+          eq(taskValues.propertyId, owner.propertyId),
+          sql`${taskValues.value} = ${JSON.stringify(optionId)}::jsonb`,
+        ),
+      );
+
+    // In multi-selects, replace the deleted option with fallbackOptionId if not already present
+    await db
+      .update(taskValues)
+      .set({
+        value: sql`(
+          select coalesce(
+            jsonb_agg(distinct elem),
+            '[]'::jsonb
+          )
+          from (
+            select case when elem = ${JSON.stringify(optionId)}::jsonb then ${JSON.stringify(fallbackOptionId)}::jsonb else elem end as elem
+            from jsonb_array_elements(${taskValues.value}) elem
+          ) s
+        )`,
+      })
+      .where(
+        and(
+          eq(taskValues.propertyId, owner.propertyId),
+          sql`jsonb_typeof(${taskValues.value}) = 'array'`,
+          sql`${taskValues.value} @> ${JSON.stringify([optionId])}::jsonb`,
+        ),
+      );
+  } else {
+    // If no other options exist in this property, clear the values
+    await db
+      .update(taskValues)
+      .set({ value: null })
+      .where(
+        and(
+          eq(taskValues.propertyId, owner.propertyId),
+          sql`${taskValues.value} = ${JSON.stringify(optionId)}::jsonb`,
+        ),
+      );
+    await db
+      .update(taskValues)
+      .set({
+        value: sql`(select coalesce(jsonb_agg(elem), '[]'::jsonb) from jsonb_array_elements(${taskValues.value}) elem where elem <> ${JSON.stringify(optionId)}::jsonb)`,
+      })
+      .where(
+        and(
+          eq(taskValues.propertyId, owner.propertyId),
+          sql`jsonb_typeof(${taskValues.value}) = 'array'`,
+          sql`${taskValues.value} @> ${JSON.stringify([optionId])}::jsonb`,
+        ),
+      );
+  }
 
   await db.delete(propertyOptions).where(eq(propertyOptions.id, optionId));
   await broadcast({ projectId: owner.projectId, scope: "board", clientId: clientIdOf(req) });

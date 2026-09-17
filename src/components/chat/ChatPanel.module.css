@@ -319,9 +319,146 @@
   color: var(--text-secondary, #c4c7c5);
 }
 
+.messageFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.messageRow:not(.messageRowSelf) .messageFooter {
+  justify-content: flex-start;
+}
+
 .messageTime {
   font-size: 0.6875rem;
   color: var(--text-muted, #80868b);
+  user-select: none;
+}
+
+.messageRowSelf .messageTime {
+  color: #93c5fd;
+  opacity: 0.85;
+}
+
+.readStatusContainer {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.readStatus {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 1px 3px;
+  border-radius: 4px;
+  transition: background 0.15s ease;
+  user-select: none;
+}
+
+.readStatus:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.tickSent {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: -1px;
+}
+
+.tickRead {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #00BFB3;
+  letter-spacing: -2px;
+  text-shadow: 0 0 6px rgba(0, 191, 179, 0.4);
+}
+
+.tickPartial {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #38bdf8;
+  letter-spacing: -1px;
+}
+
+.tickCount {
+  font-size: 0.625rem;
+  font-weight: 600;
+  background: rgba(56, 189, 248, 0.2);
+  color: #bae6fd;
+  padding: 0 4px;
+  border-radius: 6px;
+  margin-left: 2px;
+}
+
+.tickPending {
+  font-size: 0.6875rem;
+  opacity: 0.7;
+}
+
+.readersTooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  background: #0f172a;
+  border: 1px solid #334155;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+  border-radius: 8px;
+  padding: 8px 10px;
+  width: max-content;
+  max-width: 240px;
+  z-index: 100;
+  font-size: 0.75rem;
+  color: #f8fafc;
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.readersHeader {
+  font-weight: 600;
+  color: #94a3b8;
+  margin-bottom: 6px;
+  border-bottom: 1px solid #1e293b;
+  padding-bottom: 4px;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.readersList {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.readerItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+}
+
+.readerName {
+  font-weight: 500;
+  color: #f1f5f9;
+}
+
+.readerTime {
+  font-size: 0.6875rem;
+  color: #64748b;
+  margin-left: auto;
 }
 
 .messageBody {
