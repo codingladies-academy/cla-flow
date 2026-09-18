@@ -104,7 +104,7 @@ export async function ensureWorkspacesTables() {
   }
 }
 
-export async function ensureDefaultWorkspace(userId: string) {
+export async function ensureDefaultWorkspace(userId?: string) {
   await ensureWorkspacesTables();
   return db.transaction(async (tx) => {
     let [ws] = await tx.select().from(workspaces).limit(1);
@@ -114,21 +114,24 @@ export async function ensureDefaultWorkspace(userId: string) {
         .values({
           name: "Coding Ladies Academy",
           slug: "cla",
-          ownerId: userId,
+          ownerId: userId || "",
         })
         .returning();
 
       // Backfill any existing projects without a workspace
       await tx.execute(sql`UPDATE "projects" SET "workspace_id" = ${ws.id} WHERE "workspace_id" IS NULL`);
+
+      if (userId) {
+        await tx
+          .insert(workspaceMembers)
+          .values({
+            workspaceId: ws.id,
+            userId,
+            role: "owner",
+          })
+          .onConflictDoNothing();
+      }
     }
-    await tx
-      .insert(workspaceMembers)
-      .values({
-        workspaceId: ws.id,
-        userId,
-        role: ws.ownerId === userId ? "owner" : "member",
-      })
-      .onConflictDoNothing();
     return ws;
   });
 }
@@ -136,16 +139,8 @@ export async function ensureDefaultWorkspace(userId: string) {
 export async function listWorkspaces(userId: string, isSuperAdmin = false) {
   await ensureDefaultWorkspace(userId);
 
-  // Ensure user is automatically linked to any workspace containing projects they are a member or owner of
+  // Ensure workspace owners are linked to their owned workspaces
   try {
-    await db.execute(sql`
-      INSERT INTO ${workspaceMembers} ("workspace_id", "user_id", "role")
-      SELECT DISTINCT p.workspace_id, pm.user_id, 'member'
-      FROM ${projectMembers} pm
-      JOIN ${projects} p ON p.id = pm.project_id
-      WHERE pm.user_id = ${userId} AND p.workspace_id IS NOT NULL
-      ON CONFLICT DO NOTHING
-    `);
     await db.execute(sql`
       INSERT INTO ${workspaceMembers} ("workspace_id", "user_id", "role")
       SELECT w.id, w.owner_id, 'owner'

@@ -88,25 +88,6 @@ export async function coerceValue(prop: PropertyRow, raw: unknown): Promise<Task
           .onConflictDoNothing();
       }
 
-      const [proj] = await db
-        .select({ workspaceId: projects.workspaceId })
-        .from(projects)
-        .where(eq(projects.id, prop.projectId))
-        .limit(1);
-
-      if (proj?.workspaceId) {
-        await db
-          .insert(workspaceMembers)
-          .values(
-            uniqueIds.map((userId) => ({
-              workspaceId: proj.workspaceId as string,
-              userId,
-              role: "member",
-            })),
-          )
-          .onConflictDoNothing();
-      }
-
       return Array.isArray(raw) ? uniqueIds : uniqueIds[0];
     }
     case "number": {

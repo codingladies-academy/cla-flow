@@ -24,7 +24,7 @@ function generateTempPassword(): string {
   return `CLA-${part1}-${part2}`;
 }
 
-/** List all human accounts. */
+/** List all human accounts with their workspace memberships. */
 export const GET = route(async () => {
   await requireAdmin();
   const rows = await db
@@ -41,13 +41,42 @@ export const GET = route(async () => {
     .from(users)
     .where(eq(users.kind, "human"))
     .orderBy(users.createdAt);
-  return json({ users: rows });
+
+  const memberships = await db
+    .select({
+      userId: workspaceMembers.userId,
+      workspaceId: workspaceMembers.workspaceId,
+      workspaceName: workspaces.name,
+      role: workspaceMembers.role,
+    })
+    .from(workspaceMembers)
+    .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId));
+
+  const wsMap = new Map<string, Array<{ id: string; name: string; role: string }>>();
+  for (const m of memberships) {
+    if (!wsMap.has(m.userId)) wsMap.set(m.userId, []);
+    wsMap.get(m.userId)!.push({ id: m.workspaceId, name: m.workspaceName, role: m.role });
+  }
+
+  const usersWithWorkspaces = rows.map((u) => ({
+    ...u,
+    workspaces: wsMap.get(u.id) || [],
+  }));
+
+  return json({ users: usersWithWorkspaces });
 });
 
-/** Create a new staff or volunteer account. */
+/** Create a new staff or volunteer account. Workspaces are assigned manually or via explicit selection. */
 export const POST = route(async (req: Request) => {
   await requireAdmin();
-  const input = await body<{ email?: string; name?: string; password?: string; photoUrl?: string; userType?: "staff" | "volunteer" }>(req);
+  const input = await body<{
+    email?: string;
+    name?: string;
+    password?: string;
+    photoUrl?: string;
+    userType?: "staff" | "volunteer";
+    workspaceIds?: string[];
+  }>(req);
 
   const email = str(input.email, "Email", { max: 200 }).toLowerCase();
   const name = str(input.name, "Name", { max: 80 });
@@ -96,21 +125,20 @@ export const POST = route(async (req: Request) => {
     })
     .returning({ id: users.id, email: users.email, name: users.name, photoUrl: users.photoUrl, userType: users.userType });
 
-  // In internal org use, add new user to all existing workspaces and projects
-  const allWorkspaces = await db.select({ id: workspaces.id }).from(workspaces);
-  if (allWorkspaces.length) {
-    await db
-      .insert(workspaceMembers)
-      .values(allWorkspaces.map((w) => ({ workspaceId: w.id, userId: user.id, role: "member" })))
-      .onConflictDoNothing();
-  }
+  // Only assign to workspaces if explicitly selected during creation (otherwise managed manually)
+  if (Array.isArray(input.workspaceIds) && input.workspaceIds.length > 0) {
+    const validWorkspaces = await db
+      .select({ id: workspaces.id })
+      .from(workspaces);
+    const validIds = new Set(validWorkspaces.map((w) => w.id));
+    const selected = input.workspaceIds.filter((id) => validIds.has(id));
 
-  const allProjects = await db.select({ id: projects.id }).from(projects);
-  if (allProjects.length) {
-    await db
-      .insert(projectMembers)
-      .values(allProjects.map((p) => ({ projectId: p.id, userId: user.id, role: "member" })))
-      .onConflictDoNothing();
+    if (selected.length > 0) {
+      await db
+        .insert(workspaceMembers)
+        .values(selected.map((wId) => ({ workspaceId: wId, userId: user.id, role: "member" })))
+        .onConflictDoNothing();
+    }
   }
 
   // Send welcome email with credentials

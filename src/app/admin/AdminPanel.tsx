@@ -15,6 +15,7 @@ type UserRow = {
   userType: "staff" | "volunteer";
   lastActiveAt?: string | null;
   createdAt: string;
+  workspaces?: Array<{ id: string; name: string; role: string }>;
 };
 
 export function AdminPanel({
@@ -38,6 +39,7 @@ export function AdminPanel({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
+  const [selectedWsIds, setSelectedWsIds] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createdInfo, setCreatedInfo] = useState<{
@@ -221,6 +223,7 @@ export function AdminPanel({
         password: password.trim() || undefined,
         photoUrl: photoUrl.trim() || undefined,
         userType,
+        workspaceIds: selectedWsIds.length > 0 ? selectedWsIds : undefined,
       });
       setCreatedInfo({
         email: res.user.email,
@@ -232,6 +235,7 @@ export function AdminPanel({
       setEmail("");
       setPassword("");
       setPhotoUrl("");
+      setSelectedWsIds([]);
       void load();
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : "Could not create account.");
@@ -425,6 +429,58 @@ export function AdminPanel({
                     {creating ? "Creating…" : `Create ${userType === "volunteer" ? "Volunteer" : "Staff"}`}
                   </button>
                 </div>
+
+                {workspacesList.length > 0 && (
+                  <div style={{ marginTop: 8, padding: "10px 14px", background: "rgba(255, 255, 255, 0.02)", borderRadius: 8, border: "1px solid rgba(255, 255, 255, 0.08)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 4 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary, #aaa)" }}>
+                        Assign to Workspaces (Optional):
+                      </span>
+                      <span style={{ fontSize: 11, color: "var(--text-muted, #777)" }}>
+                        Leave empty to manually assign via Workspace Settings
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {workspacesList.map((ws) => {
+                        const checked = selectedWsIds.includes(ws.id);
+                        return (
+                          <label
+                            key={ws.id}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                              fontSize: 12,
+                              cursor: "pointer",
+                              userSelect: "none",
+                              background: checked ? "rgba(0, 191, 179, 0.15)" : "rgba(255, 255, 255, 0.03)",
+                              border: checked ? "1px solid #00BFB3" : "1px solid rgba(255, 255, 255, 0.1)",
+                              color: checked ? "#00BFB3" : "var(--text-primary, #ddd)",
+                              padding: "4px 10px",
+                              borderRadius: 6,
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedWsIds((prev) => [...prev, ws.id]);
+                                } else {
+                                  setSelectedWsIds((prev) => prev.filter((id) => id !== ws.id));
+                                }
+                              }}
+                              style={{ accentColor: "#00BFB3", cursor: "pointer" }}
+                            />
+                            <span>{ws.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {createError && <p className={styles.err}>{createError}</p>}
                 {createdInfo && (
                   <div className={styles.createdBanner}>
@@ -512,6 +568,7 @@ export function AdminPanel({
                             <th>Name</th>
                             <th>Type</th>
                             <th>Email</th>
+                            <th>Workspaces</th>
                             <th>Photo URL</th>
                             <th>Joined</th>
                             <th />
@@ -563,6 +620,33 @@ export function AdminPanel({
                                   </button>
                                 </td>
                                 <td className={styles.muted}>{u.email}</td>
+                                <td>
+                                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, maxWidth: 220 }}>
+                                    {u.workspaces && u.workspaces.length > 0 ? (
+                                      u.workspaces.map((ws) => (
+                                        <span
+                                          key={ws.id}
+                                          style={{
+                                            fontSize: 11,
+                                            padding: "2px 6px",
+                                            borderRadius: 4,
+                                            background: "rgba(255, 255, 255, 0.05)",
+                                            border: "1px solid rgba(255, 255, 255, 0.12)",
+                                            color: "#cbd5e1",
+                                            whiteSpace: "nowrap",
+                                          }}
+                                          title={`Role: ${ws.role}`}
+                                        >
+                                          {ws.name}
+                                        </span>
+                                      ))
+                                    ) : (
+                                      <span style={{ fontSize: 11, color: "var(--text-muted, #777)", fontStyle: "italic" }}>
+                                        None (manual)
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
                                 <td>
                                   <input
                                     className={styles.tablePhotoInput}

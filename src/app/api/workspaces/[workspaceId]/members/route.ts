@@ -2,8 +2,8 @@ import { body, json, route, str } from "@/lib/api";
 import { HttpError, requireUser, requireWorkspaceMembership } from "@/lib/auth";
 import { listWorkspaceMembers } from "@/lib/queries";
 import { db } from "@/db";
-import { workspaceMembers } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { projectMembers, projects, workspaceMembers } from "@/db/schema";
+import { and, eq, inArray } from "drizzle-orm";
 
 export const GET = route(async (_req: Request, ctx: { params: Promise<{ workspaceId: string }> }) => {
   const user = await requireUser();
@@ -54,9 +54,28 @@ export const DELETE = route(async (req: Request, ctx: { params: Promise<{ worksp
     throw new HttpError(400, "Cannot remove yourself from the workspace.");
   }
 
+  // Remove from workspace_members
   await db
     .delete(workspaceMembers)
     .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, targetUserId)));
+
+  // Also remove from project_members for any projects in this workspace
+  const wsProjects = await db
+    .select({ id: projects.id })
+    .from(projects)
+    .where(eq(projects.workspaceId, workspaceId));
+
+  if (wsProjects.length > 0) {
+    const projectIds = wsProjects.map((p) => p.id);
+    await db
+      .delete(projectMembers)
+      .where(
+        and(
+          inArray(projectMembers.projectId, projectIds),
+          eq(projectMembers.userId, targetUserId),
+        ),
+      );
+  }
 
   return json({ ok: true });
 });
